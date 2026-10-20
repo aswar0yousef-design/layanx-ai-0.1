@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Phase 3: Windows uninstall and autostart
+
+### Added
+- `LayanX-Uninstall.cmd` / `scripts/windows/uninstall.ps1`: stops LayanX, removes the autostart task and the desktop shortcut that points to this copy; keeps data by default. `-RemoveData` requires typing DELETE (or `-Yes`), writes and verifies a ZIP backup first (unless `-NoBackup`), and refuses drive roots, profile/AppData/system folders, the LayanX folder itself, and folders without LayanX markers.
+- `scripts/windows/autostart.ps1 -Enable|-Disable`: optional per-user log-on task (no admin, off by default) running `start.ps1 -NoBrowser -Unattended`.
+- `start.ps1 -Unattended`: never prompts; declines every install offer.
+- `scripts/windows/uninstall-test.ps1`, run in CI on Windows against temporary folders.
+
+### Fixed
+- `stop.ps1` no longer sweeps "helper" processes when `LAYANX_DATA_DIR` points at a broad folder (drive root, profile, AppData), which could have stopped unrelated apps.
+
 ## Unreleased — Phase 2: Control Center diagnostics
 
 ### Added
