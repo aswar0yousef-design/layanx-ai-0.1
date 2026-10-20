@@ -31,13 +31,15 @@ The present target is to run the full runtime on the user's own computer with lo
 
 LayanX now includes an in-process Scheduler and Event Mission Engine:
 
-- One-time and interval mission schedules.
+- One-time, interval, daily, weekly and monthly mission schedules; calendar triggers accept an IANA `timezone` (for example `Asia/Muscat`).
 - Bounded scheduler tick loop with duplicate-run protection.
+- Opt-in bounded retry (`retry: {maxAttempts, backoffMs}`, max 5 attempts, exponential backoff). Only enable it for goals that are safe to repeat.
+- Run history (last 500 runs) at `GET /v1/scheduler/runs?scheduleId=&projectId=&limit=`; runs cut off by a shutdown are recorded as `interrupted` and are not re-run automatically.
 - Event triggers scoped by project.
 - Optional exact payload matching for event triggers.
 - Scheduled/event missions enter the same Agent Gateway and therefore retain permissions, risk controls, approvals, verification, recovery, audit, and memory.
 - API endpoints expose schedule/trigger registration and manual event emission.
-- Scheduler state is currently process-local; durable scheduling belongs to the later PostgreSQL/operations phase.
+- With `LAYANX_RUNTIME_STORAGE_PATH` (set automatically by `npm run local` / `LayanX.cmd`) schedules and run history survive restarts. Schedules only run while LayanX is running; use Windows Task Scheduler to start LayanX at logon if jobs must run unattended.
 
 ## Dependency-aware task runtime
 

@@ -1,0 +1,19 @@
+# Changelog
+
+## Unreleased — Phase 0 audit and hardening (2026-10-20)
+
+### Security
+- File tools (`files.read/list/stat/write`) refuse targets whose real path leaves the project workspace through a symlink or Windows junction, refuse writing through links, and apply the shared Windows path guard (ADS, device names, `\\?\`, drive-relative paths).
+- New `src/security/network-guard.ts`: `browser.read` and `http.read` block loopback, `0.0.0.0/8`, private, CGNAT, link-local/cloud-metadata, multicast and IPv6 local/mapped forms, and check every DNS answer.
+
+### Added
+- `npm run doctor` is now a full system doctor (Node, Windows build, RAM, NVIDIA VRAM, data dir, disk, port, git/ffmpeg/python/powershell/playwright, persistence, providers, model fit) with `--json`, `--out` (redacted) and `--providers`.
+- Scheduler: `weekly` and `monthly` triggers, IANA `timezone`, persisted run history (`GET /v1/scheduler/runs`), opt-in bounded retry, `interrupted` status for runs cut off by a shutdown.
+- Docs: `AUDIT-2026-10-20.md`, `FEATURE_MATRIX.md`, `TESTING.md`, `TROUBLESHOOTING.md`, `SKILLS.md`, `ROADMAP.md`; updated `ARCHITECTURE.md`, `SECURITY.md`, `DOCTOR.md`, README scheduler section.
+
+### Fixed
+- Interval schedules with `runImmediately: true` re-fired on every tick after the first run.
+- Provider health checks could hang forever on an unresponsive Ollama; they now have a hard deadline.
+
+### Tests
+- New: `tool-sandbox-escape.spec.ts`, `system-doctor.spec.ts`, `scheduler-calendar-retry.spec.ts`; extended `scheduler-event-api-auth.spec.ts`.
