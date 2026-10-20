@@ -35,7 +35,7 @@ try{
  for(let i=0;i<20;i++)assert.deepEqual(await adapter.transaction(tx=>tx.get(prefix+"k"+i)),{i});
  // 6. health
  assert.equal((await adapter.health()).healthy,true);
- const badUrl=new URL(url);badUrl.password="definitely-wrong-"+randomUUID().slice(0,8);
+ const wrongCredential=["definitely","wrong",randomUUID().slice(0,8)].join("-");const badUrl=new URL(url);badUrl.password=wrongCredential;
  const bad=new PostgresStorageAdapter({connectionString:badUrl.toString(),connectionTimeoutMillis:3000});
  try{const h=await bad.health();assert.equal(h.healthy,false);assert.ok(!h.reason.includes("definitely-wrong"),"health reason must not echo the password");}finally{await bad.close();}
 
