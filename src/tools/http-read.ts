@@ -1,6 +1,6 @@
 import type {ToolAdapter} from "./executor.js";
 import type {ToolRequest} from "../core/types.js";
-import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
+import {assertPublicHttpUrl,defaultHostResolver,pinnedFetch,type HostResolver} from "../security/network-guard.js";
 
 const MAX_URL_LENGTH=2048;
 const MAX_RESPONSE_BYTES=64*1024;
@@ -21,7 +21,7 @@ function validateUrl(value:unknown):URL{
  return url;
 }
 export function createHttpReadAdapter(options:{fetcher?:typeof fetch;timeoutMs?:number;maxResponseBytes?:number;resolveHost?:HostResolver}={}):ToolAdapter{
- const fetcher=options.fetcher??fetch;
+ const fetcher=options.fetcher??pinnedFetch;
  const resolver=options.resolveHost??(options.fetcher?undefined:defaultHostResolver);
  const timeoutMs=options.timeoutMs??DEFAULT_TIMEOUT_MS;
  const maxBytes=options.maxResponseBytes??MAX_RESPONSE_BYTES;

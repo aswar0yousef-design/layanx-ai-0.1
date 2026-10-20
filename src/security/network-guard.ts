@@ -6,10 +6,15 @@
  * multicast/reserved space, IPv6 loopback/ULA/link-local, and IPv4-mapped/compatible IPv6 forms.
  *
  * Hostnames are resolved before the request and EVERY returned address must be public.
- * Residual risk (documented in docs/SECURITY.md): the HTTP client resolves again when connecting,
- * so a DNS-rebinding server can still race this check. Redirects stay disabled by the callers.
+ * `pinnedFetch` (the default transport of the guarded tools) checks the answers again inside the socket's
+ * own DNS lookup, so the connection can only go to an address that passed the check: a DNS-rebinding
+ * server cannot swap in 127.0.0.1 between the check and the connect. Redirects are never followed by it.
  */
 import {lookup} from "node:dns/promises";
+import {lookup as socketLookup,type LookupAddress,type LookupAllOptions,type LookupOneOptions} from "node:dns";
+import {request as httpRequest,type IncomingMessage} from "node:http";
+import {request as httpsRequest} from "node:https";
+import {Readable} from "node:stream";
 import {isIP} from "node:net";
 
 export type HostResolver=(hostname:string)=>Promise<string[]>;
@@ -117,3 +122,58 @@ export async function assertPublicHttpUrl(url:URL,resolver:HostResolver|undefine
  if(!addresses.length)throw new Error("Host could not be resolved.");
  if(addresses.some(isBlockedAddress))throw new Error("Host resolves to a private or local network address and is blocked.");
 }
+
+type LookupCallback=(error:NodeJS.ErrnoException|null,address:string|LookupAddress[],family?:number)=>void;
+export type SocketLookup=(hostname:string,options:LookupAllOptions,callback:(error:NodeJS.ErrnoException|null,addresses:LookupAddress[])=>void)=>void;
+
+/**
+ * fetch-compatible transport for untrusted URLs. Differences from global fetch, on purpose:
+ * - every address the socket would connect to is checked with `isBlockedAddress` (DNS pinning);
+ * - redirects are never followed: `redirect:"error"` throws on 3xx, `"manual"` returns the 3xx response,
+ *   `"follow"` is refused (callers must re-check each hop themselves);
+ * - no proxy, no cookies, no credentials in URLs.
+ */
+export function createPinnedFetch(options:{lookup?:SocketLookup;isBlocked?:(address:string)=>boolean}={}):typeof fetch{
+ const resolveAll:SocketLookup=options.lookup??((hostname,lookupOptions,callback)=>socketLookup(hostname,lookupOptions,callback));
+ const blocked=options.isBlocked??isBlockedAddress;
+ const guardedLookup=(hostname:string,lookupOptions:LookupOneOptions|LookupAllOptions,callback:LookupCallback)=>{
+  resolveAll(hostname,{...lookupOptions,all:true},(error,addresses)=>{
+   if(error){callback(error,"");return;}
+   const list=addresses??[];
+   if(!list.length){callback(Object.assign(new Error("Host could not be resolved."),{code:"ENOTFOUND"}),"");return;}
+   if(list.some(entry=>blocked(entry.address))){callback(Object.assign(new Error("Host resolves to a private or local network address and is blocked."),{code:"EBLOCKED"}),"");return;}
+   if((lookupOptions as LookupAllOptions).all)callback(null,list);
+   else callback(null,list[0]!.address,list[0]!.family);
+  });
+ };
+ const pinned=async(input:string|URL|Request,init:RequestInit={}):Promise<Response>=>{
+  if(typeof Request!=="undefined"&&input instanceof Request)throw new Error("pinnedFetch accepts a URL, not a Request object.");
+  const url=new URL(String(input));
+  if(url.protocol!=="http:"&&url.protocol!=="https:")throw new Error("Only HTTP and HTTPS URLs are allowed.");
+  const host=url.hostname.startsWith("[")?url.hostname.slice(1,-1):url.hostname;
+  if(isIP(host)&&blocked(host))throw new Error("Private or local network targets are blocked.");
+  if(init.redirect==="follow")throw new Error("pinnedFetch does not follow redirects; re-check each hop.");
+  const headers:Record<string,string>={};
+  new Headers(init.headers).forEach((value,key)=>{headers[key]=value;});
+  const body=typeof init.body==="string"||init.body instanceof Uint8Array?init.body:undefined;
+  if(init.body!=null&&body===undefined)throw new Error("pinnedFetch supports string or Uint8Array bodies only.");
+  const send=url.protocol==="https:"?httpsRequest:httpRequest;
+  const response=await new Promise<IncomingMessage>((resolveResponse,reject)=>{
+   const req=send(url,{method:init.method??"GET",headers,lookup:guardedLookup as never,signal:init.signal??undefined,agent:false},resolveResponse);
+   req.on("error",reject);
+   if(body!==undefined)req.write(body);
+   req.end();
+  });
+  const status=response.statusCode??0;
+  if(status>=300&&status<400&&response.headers.location&&(init.redirect??"error")==="error"){response.resume();throw new TypeError("Redirects are not allowed.");}
+  const outHeaders=new Headers();
+  for(const [key,value] of Object.entries(response.headers)){if(value===undefined)continue;for(const item of Array.isArray(value)?value:[value])outHeaders.append(key,item);}
+  const empty=init.method==="HEAD"||status===204||status===304;
+  if(empty)response.resume();
+  return new Response(empty?null:Readable.toWeb(response) as ReadableStream<Uint8Array>,{status,statusText:response.statusMessage,headers:outHeaders});
+ };
+ return pinned as typeof fetch;
+}
+
+/** Default transport for untrusted URLs (browser.read, http.read, media.inspect). */
+export const pinnedFetch:typeof fetch=createPinnedFetch();

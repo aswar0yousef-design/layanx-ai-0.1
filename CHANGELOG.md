@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — DNS pinning (R1)
+
+### Security
+- `pinnedFetch` / `createPinnedFetch` in `src/security/network-guard.ts`: fetch-compatible transport on Node `http`/`https` whose socket `lookup` refuses any blocked address, so the connection is pinned to checked addresses (closes DNS rebinding R1). Never follows redirects (`error` throws, `manual` returns 3xx, `follow` refused).
+- Default transport of `browser.read`, `http.read` and `media.inspect`. Test: `tests/dns-pinning.spec.ts`; live HTTPS check against example.com passed.
+
 ## Unreleased — Phase 3: Windows uninstall and autostart
 
 ### Added

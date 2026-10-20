@@ -23,8 +23,8 @@ Residual risk: a race between the real-path check and the write (TOCTOU) is poss
 ## Outbound network (SSRF)
 `browser.read` and `http.read` go through `src/security/network-guard.ts`: only http/https, no credentials in URLs, no single-label / `.local` / `.internal` names, and every IP literal or DNS answer must be public. Blocked: loopback, `0.0.0.0/8`, RFC1918, CGNAT `100.64/10`, link-local and cloud metadata `169.254.169.254`, multicast/reserved, IPv6 loopback/ULA/link-local, IPv4-mapped/NAT64/6to4 forms. Redirects stay disabled.
 
-Residual risk: DNS rebinding. The name is resolved for the check and again by the HTTP client. Closing this fully requires pinning the connection to the checked address (custom agent); tracked in `docs/ROADMAP.md`.
+DNS rebinding (R1) is closed for `browser.read`, `http.read` and `media.inspect`: their default transport is `pinnedFetch` (`network-guard.ts`, Node `http`/`https` with a guarded socket `lookup`), so every address the socket connects to is checked at connect time, and redirects are never followed by the transport. Test: `tests/dns-pinning.spec.ts` (pre-check sees a public IP, socket lookup returns 127.0.0.1 → refused, server receives 0 requests). Other outbound calls go to fixed, configured provider hosts and use global `fetch`.
 
 
 ### media.inspect (2026-10-20)
-أداة الوكيل `media.inspect` (L1) والمسار `POST /v1/business/media/inspect` يمرّان عبر `src/security/network-guard.ts` نفسه: فحص العنوان وإجابات DNS، وإعادة الفحص عند كل تحويل (حتى 3)، ومهلة 10 ثوانٍ. المخاطرة المتبقية: DNS rebinding بين الفحص والطلب (R1).
+أداة الوكيل `media.inspect` (L1) والمسار `POST /v1/business/media/inspect` يمرّان عبر `src/security/network-guard.ts` نفسه: فحص العنوان وإجابات DNS، وإعادة الفحص عند كل تحويل (حتى 3)، ومهلة 10 ثوانٍ. DNS rebinding (R1) مغلق عبر `pinnedFetch`.
