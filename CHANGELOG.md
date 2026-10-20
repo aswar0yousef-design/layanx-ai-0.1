@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Phase 1: skills runtime integrity
+
+### Added
+- `src/skills/installer.ts` + `npm run skills -- <list|inspect|install|approve|enable|disable|uninstall|verify>`: install skill packages (`skill.json` + `SKILL.md`) from a local folder with manifest validation, real SHA-256 verification, content scanning, duplicate detection, SemVer updates that return to quarantine, persisted status, and re-verification on every start (tampered skills become `rejected`).
+- Skill content rules are shared by learned and installed skills (`scanSkillContent`), extended with PowerShell `iex`/`-EncodedCommand`, `certutil -urlcache`, Defender tampering and backup deletion.
+- Test: `skill-installer.spec.ts`.
+
 ## Unreleased — Phase 0 audit and hardening (2026-10-20)
 
 ### Security

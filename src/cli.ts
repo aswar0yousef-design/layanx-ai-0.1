@@ -46,5 +46,26 @@ else if(command==="hooks"){
  const result=action==="install"?installAgentHooks({dataDir:paths.dataDir,port,agents}):action==="uninstall"?uninstallAgentHooks({dataDir:paths.dataDir,agents}):agentHooksStatus({dataDir:paths.dataDir});
  console.log(JSON.stringify(result,null,2));process.exitCode=(result as Array<{error?:string}>).some(r=>r.error)?1:0;
 }
+else if(command==="skills"){
+ // Local skill package management. Install never executes anything; approve/enable are explicit owner steps.
+ const [{SkillRegistry},{SkillInstaller},{defaultDataDir},{join}]=await Promise.all([import("./skills/registry.js"),import("./skills/installer.js"),import("./platform/paths.js"),import("node:path")]);
+ const installer=new SkillInstaller(new SkillRegistry(),{root:process.env.LAYANX_SKILLS_DIR?.trim()||join(defaultDataDir(),"skills")});
+ installer.hydrate();
+ const [sub,arg]=[process.argv[3],process.argv[4]];
+ const need=(label:string)=>{if(!arg)throw new Error(`Usage: layanx skills ${sub} <${label}>`);return arg;};
+ try{
+  let out:unknown;
+  if(!sub||sub==="list")out=installer.list().map(r=>({id:r.manifest.id,version:r.manifest.version,status:r.manifest.status,permissions:r.manifest.permissions,tools:r.manifest.tools,networkHosts:r.manifest.networkHosts,findings:r.findings.map(f=>f.code)}));
+  else if(sub==="inspect"){const i=installer.inspect(need("folder"));out={manifest:i.manifest,safe:i.safe,findings:i.findings};}
+  else if(sub==="install")out=installer.install(need("folder"));
+  else if(sub==="approve")out=installer.approve(need("id"));
+  else if(sub==="enable")out=installer.enable(need("id"));
+  else if(sub==="disable")out=installer.disable(need("id"));
+  else if(sub==="uninstall"){installer.uninstall(need("id"));out={removed:arg};}
+  else if(sub==="verify")out=installer.list().map(r=>({id:r.manifest.id,intact:installer.verifyStored(r.manifest.id)}));
+  else throw new Error("Usage: layanx skills <list|inspect <folder>|install <folder>|approve <id>|enable <id>|disable <id>|uninstall <id>|verify>");
+  console.log(JSON.stringify(out,null,2));
+ }catch(error){console.error(error instanceof Error?error.message:String(error));process.exitCode=1;}
+}
 else if(command==="ready"){const gate=await runReadinessGate();console.log(JSON.stringify(gate,null,2));process.exitCode=gate.ready?0:1;}
-else{console.error("Usage: layanx <status|check|health|doctor [--json] [--out file] [--providers]|ready>");process.exitCode=1;}
+else{console.error("Usage: layanx <status|check|health|doctor [--json] [--out file] [--providers]|skills ...|ready>");process.exitCode=1;}
