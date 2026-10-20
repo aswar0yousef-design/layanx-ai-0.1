@@ -8,7 +8,7 @@ import type {ToolAdapter} from "./executor.js";
 import {ensureGitOnPath} from "./git.js";
 import {ProjectIsolation} from "../security/project-isolation.js";
 import {assertSafeWorkspacePath,isPathInside} from "../platform/path-guard.js";
-import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
+import {assertPublicHttpUrl,defaultHostResolver,pinnedFetch,type HostResolver} from "../security/network-guard.js";
 import {isolationLevel,restrictedAvailable} from "../autonomy/sandbox.js";
 import {createProjectRunnerAdapter,npmCommand,runOnce} from "../autonomy/project-runner.js";
 import {gitSnapshot,prepareRestricted,restrictedCommand,restrictedEnv,verifyGitAfterRun} from "../platform/windows-sandbox.js";
@@ -102,7 +102,7 @@ function validateUrl(raw:string):URL{
  return url;
 }
 export function createBrowserToolAdapter(options:{fetcher?:typeof fetch;resolveHost?:HostResolver}={}):ToolAdapter{
- const fetcher=options.fetcher??fetch;
+ const fetcher=options.fetcher??pinnedFetch;
  // Real network transport => resolve DNS and reject private answers. Injected transports skip DNS unless a resolver is given.
  const resolver=options.resolveHost??(options.fetcher?undefined:defaultHostResolver);
  return{async execute(request){

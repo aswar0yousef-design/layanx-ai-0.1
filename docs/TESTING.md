@@ -21,7 +21,7 @@
 |---|---|
 | `npm run test:integration` | 34 (API محلي حقيقي، تخزين، Postgres fallback، MCP، إعادة تشغيل) |
 | `npm run test:e2e` | 2 (`e2e-goal-to-memory`، القبول) — تغطية e2e ما زالت قليلة |
-| `npm run test:security` | 17 |
+| `npm run test:security` | 19 |
 | `npm run test:recovery` | 24 |
 
 المجموعة التي لا تطابق أي ملف تفشل بدل أن تنجح فارغة. `npm test` يشغّل كل الملفات دائمًا (وهو ما يشغّله CI).

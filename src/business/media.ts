@@ -2,7 +2,7 @@ import {createHash} from "node:crypto";
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from "node:fs";
 import {dirname} from "node:path";
 import type {MediaAsset,MediaKind} from "./types.js";
-import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
+import {assertPublicHttpUrl,defaultHostResolver,pinnedFetch,type HostResolver} from "../security/network-guard.js";
 
 export interface MediaInspection{url:string;kind:MediaKind;mimeType?:string;contentLength?:number;reachable:boolean;inspectedAt:string;}
 const now=()=>new Date().toISOString();
@@ -22,7 +22,7 @@ function inferKind(mime?:string,url=""):MediaKind{
  * HEAD request that cannot be steered at this machine or the LAN: every hop (including redirects, max 3)
  * passes the shared network guard. `media.inspect` is an L1 agent tool, so its URL is untrusted input.
  */
-async function head(url:string,fetcher:typeof fetch=fetch,resolver:HostResolver|undefined=defaultHostResolver){
+async function head(url:string,fetcher:typeof fetch=pinnedFetch,resolver:HostResolver|undefined=defaultHostResolver){
  let current=new URL(url);
  for(let hop=0;hop<=3;hop++){
   await assertPublicHttpUrl(current,resolver);
@@ -43,7 +43,7 @@ export class MediaManager{
   if(!/^https?:\/\//i.test(url))throw new Error("media_url_must_be_http");
   const existing=this.items.find(x=>x.url===url);
   try{
-   const r=await head(url,this.options.fetcher??globalThis.fetch,this.options.resolveHost??defaultHostResolver);
+   const r=await head(url,this.options.fetcher??pinnedFetch,this.options.resolveHost??defaultHostResolver);
    if(!r.ok)throw new Error(`media_http_${r.status}`);
    const result:MediaInspection={url,kind:inferKind(r.mime,url),mimeType:r.mime,contentLength:r.length,reachable:true,inspectedAt:now()};
    const previous=this.items.findIndex(x=>x.url===url);if(previous>=0)this.items[previous]=result;else this.items.push(result);this.persist();return result;
