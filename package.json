@@ -32,7 +32,11 @@
     "free:check": "npm run typecheck && npm test && npm run build && npm run free:bootstrap",
     "vsix": "node scripts/build-vsix.mjs",
     "tools:security": "tsx scripts/install-security-tools.ts",
-    "skills": "tsx src/cli.ts skills"
+    "skills": "tsx src/cli.ts skills",
+    "test:integration": "node scripts/test-suite-runner.mjs --suite integration",
+    "test:e2e": "node scripts/test-suite-runner.mjs --suite e2e",
+    "test:security": "node scripts/test-suite-runner.mjs --suite security",
+    "test:recovery": "node scripts/test-suite-runner.mjs --suite recovery"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

@@ -1,0 +1,7 @@
+{
+  "$comment": "Named subsets of tests/*.spec.ts for npm run test:<suite>. Patterns are case-insensitive regexes on the file name. `npm test` always runs every file. A suite that matches no file fails instead of passing empty.",
+  "integration": ["api", "integration", "persistence", "postgres", "restart", "crash", "runtime-bootstrap", "runtime-storage", "mcp-client", "mcp-gateway"],
+  "e2e": ["^e2e-", "end-to-end", "acceptance", "goal-to"],
+  "security": ["red-team", "isolation", "sandbox-escape", "http-read-tool", "security", "secret", "skill-installer", "sentinel"],
+  "recovery": ["recovery", "restart", "crash", "resume", "interrupted", "scheduler-calendar-retry"]
+}
