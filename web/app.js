@@ -301,6 +301,8 @@ const isPending=a=>a.pending??!a.approved;
 const waitingFor=id=>S.approvals.some(a=>isPending(a)&&a.missionId===id);
 const stateOf=m=>waitingFor(m.id)?"wait":missionState(m.status);
 const goalText=m=>isQuick(m)?(m.tools[0].payload&&m.tools[0].payload.command?"> "+m.tools[0].payload.command:m.tools[0].tool):(m.goal||m.id).split("\n")[0].replace(JOB_TASK,"");
+const CHECK_AR={node:"Node.js",os:"نظام التشغيل",memory:"الذاكرة (RAM)",gpu:"كرت الشاشة",["data-dir"]:"مجلد البيانات",disk:"مساحة القرص",persistence:"التخزين الدائم",providers:"مزودو النماذج",["provider-ollama"]:"Ollama (النماذج المحلية)",git:"Git",ffmpeg:"FFmpeg",python:"Python",powershell:"PowerShell"};
+function checkName(id){if(LANG!=="ar")return id;if(CHECK_AR[id])return CHECK_AR[id]+" · "+id;const m=/^(tool|provider|model|port)-(.+)$/.exec(id);if(!m)return id;const label={tool:"أداة",provider:"مزود",model:"نموذج",port:"منفذ"}[m[1]];return label+" "+m[2];}
 const skillState=st=>st==="enabled"?"done":st==="approved"?"run":st==="disabled"||st==="rejected"?"fail":"wait";
 const pill=(state,text)=>el("span",{class:"status "+(STATUS_CLASS[state]||"s-pend"),text:text||t("st_"+state)});
 const TOOL_LABEL={"apis.search":"tl_apis","files.write":"tl_files_write","files.read":"tl_files_read","terminal.exec":"tl_terminal","git.commit":"tl_git_commit","git.push":"tl_git_push","git.status":"tl_git_status","desktop.screenshot":"tl_shot","desktop.mouse.click":"tl_click","desktop.keyboard.type":"tl_type","project.verify":"tl_verify","research.internet":"tl_research",
@@ -1129,7 +1131,7 @@ const VIEWS={
   fill(v,head(t("diagnostics"),t("diagLead"),again,exp),
    el("section",{class:"card"},el("div",{style:"display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"},pill(r.ok?"done":"fail",r.ok?t("diagReady"):t("diagNotReady")),el("span",{dir:"ltr",text:"pass "+r.summary.pass+" · warn "+r.summary.warn+" · fail "+r.summary.fail})),
     el("p",{class:"s",dir:"ltr",style:"margin-top:.6rem",text:sys.platform+" "+sys.release+" · Node "+sys.node+" · "+sys.cpus+" CPU · "+gib(sys.totalMemoryBytes)+" RAM"+(gpu?" · "+gpu:"")})),
-   el("section",{class:"card",style:"margin-top:1rem"},el("div",{class:"rows"},r.checks.map(c=>el("div",{class:"row"},el("div",{class:"t",dir:"ltr",text:c.id+(c.blocking&&c.status==="fail"?" · "+t("diagBlocking"):"")}),el("div",{class:"s",dir:"auto",text:c.detail+(c.hint&&c.status!=="pass"?" → "+c.hint:"")}),el("div",{class:"a"},pill(c.status==="pass"?"done":c.status==="warn"?"wait":"fail",c.status.toUpperCase())))))),
+   el("section",{class:"card",style:"margin-top:1rem"},el("div",{class:"rows"},r.checks.map(c=>el("div",{class:"row"},el("div",{class:"t",dir:"auto",text:checkName(c.id)+(c.blocking&&c.status==="fail"?" · "+t("diagBlocking"):"")}),el("div",{class:"s",dir:"auto",text:c.detail+(c.hint&&c.status!=="pass"?" → "+c.hint:"")}),el("div",{class:"a"},pill(c.status==="pass"?"done":c.status==="warn"?"wait":"fail",c.status.toUpperCase())))))),
    r.ollamaModels.length?el("section",{class:"card",style:"margin-top:1rem"},el("h3",{text:t("diagModels")}),el("div",{class:"rows"},r.ollamaModels.map(m=>el("div",{class:"row"},el("div",{class:"t",dir:"ltr",text:m.name}),el("div",{class:"s",dir:"ltr",text:[m.parameterSize,m.quantization,m.sizeBytes?gib(m.sizeBytes):""].filter(Boolean).join(" · ")}))))):null);
  },
  async models(v){
