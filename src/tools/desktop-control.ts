@@ -6,7 +6,8 @@ import {randomUUID} from "node:crypto";
 import {createInterface} from "node:readline";
 import {readFile,unlink} from "node:fs/promises";
 import type {ToolRequest} from "../core/types.js";
-import {KNOWN_APPS,resolveOpenTarget} from "./open-app.js";
+import {KNOWN_APPS,firstYouTubeVideoId,resolveOpenTarget} from "./open-app.js";
+import {pinnedFetch} from "../security/network-guard.js";
 import type {ToolAdapter} from "./executor.js";
 import {safeChildEnv} from "../platform/safe-env.js";
 
@@ -293,7 +294,26 @@ export function parseWindowTitleMatch(raw:string,requestedTitle:string):{exists:
  };
 }
 
-export function createDesktopControlToolAdapter(options:{runner?:Runner;windows?:WindowsDesktopBackend}={}):ToolAdapter{
+/**
+ * «شغّل سورة الكهف»: the open request carries `play` (what to play). LayanX reads YouTube's public results
+ * page through the guarded fetch (no redirects followed, public addresses only) and opens the first video,
+ * which starts playing; if that page cannot be read, the results page opens instead so the owner picks.
+ */
+export async function resolvePlayRequest(x:Record<string,unknown>,fetcher:typeof fetch):Promise<{payload:Record<string,unknown>;video:string|null}>{
+ if(x.play===undefined)return{payload:x,video:null};
+ const query=typeof x.play==="string"?x.play.trim():"";
+ if(!query||query.length>150)throw new Error("play must be 1-150 characters.");
+ const results="https://www.youtube.com/results?search_query="+encodeURIComponent(query);
+ let video:string|null=null;
+ try{
+  const response=await fetcher(results,{headers:{"accept-language":"ar,en;q=0.8","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"},redirect:"manual",signal:AbortSignal.timeout(8000)});
+  if(response.ok)video=firstYouTubeVideoId((await response.text()).slice(0,3_000_000));
+ }catch{video=null;}
+ const {play:_play,...rest}=x;
+ return{payload:{...rest,url:video?"https://www.youtube.com/watch?v="+video:results},video};
+}
+
+export function createDesktopControlToolAdapter(options:{runner?:Runner;windows?:WindowsDesktopBackend;fetcher?:typeof fetch}={}):ToolAdapter{
  const run=options.runner??runner();
  const win=():WindowsDesktopBackend=>options.windows??(options.runner?runnerBackend(options.runner):(sharedHelper??=new PowerShellDesktopHelper()));
  return {async execute(request){
@@ -350,7 +370,9 @@ export function createDesktopControlToolAdapter(options:{runner?:Runner;windows?
    return {index,characters:value.length,method};
   }
   if(request.action==="desktop open app"){
-   const target=resolveOpenTarget(x);
+   const played=await resolvePlayRequest(x,options.fetcher??pinnedFetch);
+   const target=resolveOpenTarget(played.payload);
+   const playInfo=x.play===undefined?{}:{playing:played.video?"https://www.youtube.com/watch?v="+played.video:null};
    if(process.platform==="win32"){
     const value=target.kind==="known"?target.app:target.kind==="url"?target.url:target.name;
     // A Start-menu search (Get-StartApps) loads its modules on first use and must scan every entry for a
@@ -361,9 +383,9 @@ export function createDesktopControlToolAdapter(options:{runner?:Runner;windows?
      if(error instanceof Error&&error.message==="Desktop action timed out."&&target.kind==="start")throw new Error("Searching the installed programs for \""+value+"\" took longer than "+timeoutMs/1000+"s. Try again, or use the exact program name.");
      throw error;
     });
-    return {opened:true,what:out.split("|").slice(1).join("|")||target.label,via:target.kind==="known"?"program":target.kind==="start"?"start menu":"web page"};
+    return {opened:true,what:out.split("|").slice(1).join("|")||target.label,via:target.kind==="known"?"program":target.kind==="start"?"start menu":"web page",...playInfo};
    }
-   if(target.kind==="url"){const r=await run(process.platform==="darwin"?"open":"xdg-open",[target.url]);if(r.code!==0)throw new Error(r.stderr||"Could not open the web page.");return {opened:true,what:target.url,via:"web page"};}
+   if(target.kind==="url"){const r=await run(process.platform==="darwin"?"open":"xdg-open",[target.url]);if(r.code!==0)throw new Error(r.stderr||"Could not open the web page.");return {opened:true,what:target.url,via:"web page",...playInfo};}
    if(process.platform==="darwin"){const name=target.kind==="known"?KNOWN_APPS[target.app].label:target.name;const r=await run("open",["-a",name]);if(r.code!==0)throw new Error(r.stderr||"Could not open "+name+".");return {opened:true,what:name,via:"program"};}
    throw new Error("Opening programs by name is available on Windows and macOS.");
   }

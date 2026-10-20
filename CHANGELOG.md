@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Compound desktop requests
+
+### Fixed
+- «افتح كروم وافتح يوتيوب وشغّل القرآن الكريم بصوت رعد الكردي» was planned by the cloud model as a 3-milestone mission (git.branch approval, "verify Chrome" given to the researcher, stop at research-playwright). The supervisor's direct desktop path was limited to Notepad; it now covers every program, site and video request `openRequest` understands, with an optional window check by title («YouTube», «Google Chrome»).
+
+### Added
+- `openRequest` understands short chains of open / play / search («افتح المتصفح وابحث عن أسعار الذهب», "open chrome and search for…", «شغّل سورة الكهف على يوتيوب») and well-known sites by name (YouTube, Google, Gmail, Maps, Facebook, Instagram, TikTok, X, WhatsApp Web, GitHub, ChatGPT). Development and research sentences («شغّل الاختبارات», «ابحث عن أسعار الذهب») stay with the planner.
+- `desktop.app.open` `payload.play`: reads YouTube's public results page through the guarded fetch and opens the first video (falls back to the results page). Verified live: the first result for «القرآن الكريم بصوت رعد الكردي» is the reciter's official full Surah Al-Baqarah.
+
 ## Unreleased — Scheduler save tracking
 
 ### Fixed
