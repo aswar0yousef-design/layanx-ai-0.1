@@ -15,7 +15,27 @@ if(command==="secrets"){try{await runSecrets();}catch(error){console.error(error
 else if(command==="status"){console.log(JSON.stringify(runtimeStatus(),null,2));}
 else if(command==="check"){const status=runtimeStatus();console.log(JSON.stringify(status,null,2));process.exitCode=status.ready?0:1;}
 else if(command==="health"){const health=await runtimeHealth();console.log(JSON.stringify(health,null,2));process.exitCode=health.ready&&health.healthy?0:1;}
-else if(command==="doctor"){const doctor=await providerDoctor();console.log(JSON.stringify(doctor,null,2));process.exitCode=doctor.ok?0:1;}
+else if(command==="doctor"){
+ // `doctor --providers` keeps the original provider-only output; plain `doctor` inspects the whole machine.
+ if(process.argv.includes("--providers")){const doctor=await providerDoctor();console.log(JSON.stringify(doctor,null,2));process.exitCode=doctor.ok?0:1;}
+ else{
+  const {systemDoctor,redactReport}=await import("./system-doctor.js");
+  const report=redactReport(await systemDoctor());
+  const outIndex=process.argv.indexOf("--out"),out=outIndex>0?process.argv[outIndex+1]:undefined;
+  if(out){const {writeFile}=await import("node:fs/promises");await writeFile(out,JSON.stringify(report,null,2),"utf8");}
+  if(process.argv.includes("--json"))console.log(JSON.stringify(report,null,2));
+  else{
+   const mark={pass:"[ OK ]",warn:"[WARN]",fail:"[FAIL]"} as const;
+   console.log(`LayanX System Doctor  ${report.generatedAt}`);
+   console.log(`${report.system.platform} ${report.system.release} | Node ${report.system.node} | ${report.system.cpus} CPU threads | ${(report.system.totalMemoryBytes/1024**3).toFixed(1)} GiB RAM`);
+   for(const check of report.checks){console.log(`${mark[check.status]} ${check.id}: ${check.detail}`);if(check.hint&&check.status!=="pass")console.log(`        -> ${check.hint}`);}
+   if(report.ollamaModels.length)console.log("Installed Ollama models: "+report.ollamaModels.map(m=>m.name+(m.sizeBytes?` (${(m.sizeBytes/1024**3).toFixed(1)} GiB)`:"")).join(", "));
+   console.log(`\nResult: ${report.ok?"READY":"NOT READY"}  pass=${report.summary.pass} warn=${report.summary.warn} fail=${report.summary.fail}`+(report.summary.blockingFailures.length?`  blocking: ${report.summary.blockingFailures.join(", ")}`:""));
+   if(out)console.log(`Redacted report written to ${out}`);
+  }
+  process.exitCode=report.ok?0:1;
+ }
+}
 else if(command==="hooks"){
  // layanx hooks [status|install|uninstall] [claude|codex|all]: Claude Code / Codex permission requests through LayanX (phone + fingerprint).
  const {installAgentHooks,uninstallAgentHooks,agentHooksStatus}=await import("./local/agent-hooks.js");
@@ -27,4 +47,4 @@ else if(command==="hooks"){
  console.log(JSON.stringify(result,null,2));process.exitCode=(result as Array<{error?:string}>).some(r=>r.error)?1:0;
 }
 else if(command==="ready"){const gate=await runReadinessGate();console.log(JSON.stringify(gate,null,2));process.exitCode=gate.ready?0:1;}
-else{console.error("Usage: layanx <status|check|health|doctor|ready>");process.exitCode=1;}
+else{console.error("Usage: layanx <status|check|health|doctor [--json] [--out file] [--providers]|ready>");process.exitCode=1;}

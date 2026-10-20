@@ -1,12 +1,14 @@
 import {linkedProjectPath} from "../platform/linked-projects.js";
 import {safeChildEnv} from "../platform/safe-env.js";
-import {readFile,readdir,stat,mkdir,writeFile} from "node:fs/promises";
-import {resolve,relative,isAbsolute,sep} from "node:path";
+import {readFile,readdir,stat,lstat,mkdir,writeFile,realpath} from "node:fs/promises";
+import {resolve,relative,isAbsolute,sep,dirname} from "node:path";
 import {spawn} from "node:child_process";
 import type {ToolRequest} from "../core/types.js";
 import type {ToolAdapter} from "./executor.js";
 import {ensureGitOnPath} from "./git.js";
 import {ProjectIsolation} from "../security/project-isolation.js";
+import {assertSafeWorkspacePath,isPathInside} from "../platform/path-guard.js";
+import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
 import {isolationLevel,restrictedAvailable} from "../autonomy/sandbox.js";
 import {createProjectRunnerAdapter,npmCommand,runOnce} from "../autonomy/project-runner.js";
 import {gitSnapshot,prepareRestricted,restrictedCommand,restrictedEnv,verifyGitAfterRun} from "../platform/windows-sandbox.js";
@@ -32,14 +34,38 @@ function workspaceFor(root:string,projectId?:string):string{
 function sandboxPath(root:string,input:string):string{
  if(!input||isAbsolute(input))throw new Error("Workspace paths must be relative.");
  const base=resolve(root),target=resolve(base,input),rel=relative(base,target);
- if(rel===""||(!rel.startsWith(".."+sep)&&rel!==".."))return target;
- throw new Error("Workspace path escapes the project sandbox.");
+ // isAbsolute(rel): on Windows a drive-relative input such as "D:foo" resolves onto another drive.
+ if(!(rel===""||(!isAbsolute(rel)&&!rel.startsWith(".."+sep)&&rel!=="..")))throw new Error("Workspace path escapes the project sandbox.");
+ // Shared Windows hardening: NTFS alternate data streams, CON/NUL/COM1 device names, \\?\ prefixes, trailing dot/space.
+ assertSafeWorkspacePath(base,input);
+ return target;
+}
+const isInside=(base:string,target:string)=>isPathInside(base,target);
+/** Nearest existing ancestor (or the path itself), resolved through every symbolic link / junction. */
+async function realExistingAncestor(target:string):Promise<string>{
+ let current=target;
+ for(;;){
+  try{return await realpath(current);}
+  catch(error){const code=(error as NodeJS.ErrnoException).code;if(code!=="ENOENT"&&code!=="ENOTDIR")throw error;}
+  const parent=dirname(current);if(parent===current)throw new Error("Workspace path could not be resolved.");current=parent;
+ }
+}
+/**
+ * Lexical checks alone let a symlink or Windows junction inside the workspace point outside it.
+ * Resolve the real location of the target (or of its nearest existing ancestor for new files)
+ * and require it to stay inside the real workspace root.
+ */
+async function assertRealPathInside(workspace:string,target:string):Promise<void>{
+ const base=await realpath(workspace);
+ const real=await realExistingAncestor(target);
+ if(!isInside(base,real))throw new Error("Workspace path escapes the project sandbox through a link.");
 }
 export function createFileToolAdapter(options:{root:string}):ToolAdapter{
  const root=resolve(options.root);
  return{async execute(request){
   const workspace=workspaceFor(root,request.projectId);await mkdir(workspace,{recursive:true});
   const input=payload(request),path=typeof input.path==="string"?input.path:"",target=sandboxPath(workspace,path);
+  await assertRealPathInside(workspace,target);
   if(request.action==="list files"){const entries=await readdir(target,{withFileTypes:true});return{path,entries:entries.slice(0,200).map(entry=>({name:entry.name,type:entry.isDirectory()?"directory":"file"}))};}
   if(request.action==="stat file"){const info=await stat(target);return{path,type:info.isDirectory()?"directory":"file",size:info.size,modifiedAt:info.mtime.toISOString()};}
   if(request.action==="read file"){const info=await stat(target);if(!info.isFile())throw new Error("Target is not a file.");if(info.size>1024*1024)throw new Error("File exceeds the 1 MiB read limit.");return{path,content:await readFile(target,"utf8")};}
@@ -56,7 +82,11 @@ export function createFileWriteToolAdapter(options:{root:string}):ToolAdapter{
   if(content.length>2*1024*1024)throw new Error("File content exceeds the 2 MiB write limit.");
   const target=sandboxPath(workspace,path);
   if(request.action==="write file"||request.action==="modify file"){
+   await assertRealPathInside(workspace,target);
+   const existing=await lstat(target).catch(()=>undefined);
+   if(existing?.isSymbolicLink())throw new Error("Writing through a symbolic link is blocked.");
    await mkdir(resolve(target,".."),{recursive:true});
+   await assertRealPathInside(workspace,dirname(target));
    await writeFile(target,content,"utf8");
    return{path,bytes:Buffer.byteLength(content,"utf8"),written:true};
   }
@@ -71,10 +101,13 @@ function validateUrl(raw:string):URL{
  if(["localhost","127.0.0.1","::1"].includes(url.hostname)||url.hostname.endsWith(".localhost"))throw new Error("Local browser targets are blocked.");
  return url;
 }
-export function createBrowserToolAdapter(options:{fetcher?:typeof fetch}={}):ToolAdapter{
+export function createBrowserToolAdapter(options:{fetcher?:typeof fetch;resolveHost?:HostResolver}={}):ToolAdapter{
  const fetcher=options.fetcher??fetch;
+ // Real network transport => resolve DNS and reject private answers. Injected transports skip DNS unless a resolver is given.
+ const resolver=options.resolveHost??(options.fetcher?undefined:defaultHostResolver);
  return{async execute(request){
   const input=payload(request),raw=typeof input.url==="string"?input.url:"",url=validateUrl(raw);
+  await assertPublicHttpUrl(url,resolver);
   const response=await fetcher(url,{method:"GET",redirect:"error",signal:AbortSignal.timeout(5000)});
   const body=await response.text();if(body.length>256*1024)throw new Error("Browser response exceeds the 256 KiB limit.");
   return{url:url.toString(),status:response.status,contentType:response.headers.get("content-type"),body};

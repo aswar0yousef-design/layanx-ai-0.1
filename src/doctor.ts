@@ -12,12 +12,25 @@ export interface ProviderDoctorResult{
   reason?:string;
 }
 
+/**
+ * fetch with a hard deadline. Uses a referenced timer (AbortSignal.timeout is unref'd), so a server that
+ * accepts the connection but never answers still ends in a TimeoutError instead of a silent hang.
+ */
+export async function fetchWithDeadline(fetcher:typeof fetch,url:string,init:RequestInit,timeoutMs:number):Promise<Response>{
+ const controller=new AbortController();
+ let timer:ReturnType<typeof setTimeout>|undefined;
+ const deadline=new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>{const error=new Error("Request timed out after "+timeoutMs+"ms.");error.name="TimeoutError";controller.abort(error);reject(error);},timeoutMs);});
+ try{return await Promise.race([fetcher(url,{...init,signal:controller.signal}),deadline]);}
+ finally{clearTimeout(timer);}
+}
+
 function ollamaTagsUrl(baseUrl:string){return baseUrl.replace(/\/$/,"")+"/api/tags";}
 
 async function cloudHealth(
   provider:"openai"|"anthropic"|"gemini",
   config:ReturnType<typeof loadProviderConfig>,
-  fetcher:typeof fetch
+  fetcher:typeof fetch,
+  timeoutMs:number
 ):Promise<ProviderDoctorResult>{
   if(provider==="openai"){
     if(!config.openai.enabled)return{provider,configured:false,reachable:false,model:config.openai.model,reason:"OpenAI is disabled."};
@@ -26,7 +39,8 @@ async function cloudHealth(
       apiKey:config.openai.apiKey,
       baseUrl:config.openai.baseUrl,
       healthUrl:config.openai.healthUrl,
-      fetcher
+      fetcher,
+      timeoutMs
     }).health();
     return{provider,configured:true,reachable:health.available,model:config.openai.model,reason:health.reason};
   }
@@ -37,7 +51,8 @@ async function cloudHealth(
       apiKey:config.anthropic.apiKey,
       baseUrl:config.anthropic.baseUrl,
       healthUrl:config.anthropic.healthUrl,
-      fetcher
+      fetcher,
+      timeoutMs
     }).health();
     return{provider,configured:true,reachable:health.available,model:config.anthropic.model,reason:health.reason};
   }
@@ -47,18 +62,21 @@ async function cloudHealth(
     apiKey:config.gemini.apiKey,
     baseUrl:config.gemini.baseUrl,
     healthUrl:config.gemini.healthUrl,
-    fetcher
+    fetcher,
+    timeoutMs
   }).health();
   return{provider,configured:true,reachable:health.available,model:config.gemini.model,reason:health.reason};
 }
 
-export async function providerDoctor(fetcher:typeof fetch=fetch):Promise<{ok:boolean;providers:ProviderDoctorResult[]}>{
- const config=loadProviderConfig();
+/** Live provider checks. Every request is bounded by timeoutMs so a hung server cannot stall the doctor. */
+export async function providerDoctor(fetcher:typeof fetch=fetch,options:{timeoutMs?:number;env?:NodeJS.ProcessEnv}={}):Promise<{ok:boolean;providers:ProviderDoctorResult[]}>{
+ const config=loadProviderConfig(options.env??process.env);
+ const timeoutMs=options.timeoutMs??5000;
  const results:ProviderDoctorResult[]=[];
 
  if(config.ollama.enabled&&(config.mode==="local"||config.mode==="hybrid")){
   try{
-   const response=await fetcher(ollamaTagsUrl(config.ollama.baseUrl),{method:"GET"});
+   const response=await fetchWithDeadline(fetcher,ollamaTagsUrl(config.ollama.baseUrl),{method:"GET"},timeoutMs);
    if(!response.ok)throw new Error("Ollama returned HTTP "+response.status);
    const body=await response.json() as {models?:Array<{name?:string}>};
    const names=(body.models??[]).map(model=>model.name).filter((name):name is string=>Boolean(name));
@@ -70,14 +88,14 @@ export async function providerDoctor(fetcher:typeof fetch=fetch):Promise<{ok:boo
   }catch(error){
    results.push({
     provider:"ollama",configured:true,reachable:false,model:config.ollama.model,modelAvailable:false,
-    reason:error instanceof Error?error.message:"Ollama is unreachable."
+    reason:error instanceof Error&&(error.name==="TimeoutError"||error.name==="AbortError")?"Ollama request timed out after "+timeoutMs+"ms.":error instanceof Error?error.message:"Ollama is unreachable."
    });
   }
  }
 
  if(config.mode==="cloud"||config.mode==="hybrid"){
   for(const provider of ["openai","anthropic","gemini"] as const){
-   results.push(await cloudHealth(provider,config,fetcher));
+   results.push(await cloudHealth(provider,config,fetcher,timeoutMs));
   }
  }
 
