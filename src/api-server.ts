@@ -1057,7 +1057,7 @@ export function startRuntimeApi(options:RuntimeApiOptions){
     const projectId=typeof input.projectId==="string"?input.projectId.trim():"";
     const trigger=input.trigger&&typeof input.trigger==="object"&&!Array.isArray(input.trigger)?input.trigger as import("./core/scheduler.js").ScheduleTrigger:null;
     if(!goal||!projectId||!trigger){json(response,400,{ok:false,error:"goal, projectId, and trigger are required"});return;}
-    const schedule=options.core.scheduler.register({goal,projectId,trigger,maxSteps:typeof input.maxSteps==="number"?Math.min(Math.max(Math.floor(input.maxSteps),1),25):10,agentId:typeof input.agentId==="string"&&input.agentId.trim()?input.agentId.trim():"core",enabled:input.enabled!==false});
+    const schedule=options.core.scheduler.register({goal,projectId,trigger,maxSteps:typeof input.maxSteps==="number"?Math.min(Math.max(Math.floor(input.maxSteps),1),25):10,agentId:typeof input.agentId==="string"&&input.agentId.trim()?input.agentId.trim():"core",enabled:input.enabled!==false,retry:input.retry&&typeof input.retry==="object"&&!Array.isArray(input.retry)?input.retry as import("./core/scheduler.js").ScheduleRetryPolicy:undefined});
     json(response,201,{ok:true,schedule});
    }catch(error){json(response,422,{ok:false,error:error instanceof Error?error.message:"schedule creation failed"});}
    return;
@@ -1075,6 +1075,11 @@ export function startRuntimeApi(options:RuntimeApiOptions){
    try{options.core.scheduler.unregister(decodeURIComponent(request.url.split("/")[3]??""));json(response,200,{ok:true});}
    catch(error){json(response,404,{ok:false,error:error instanceof Error?error.message:"schedule not found"});}
    return;
+  }
+  if(request.method==="GET"&&request.url?.split("?")[0]==="/v1/scheduler/runs"){if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
+   const query=new URL(request.url,"http://local").searchParams;
+   const limit=Number(query.get("limit")??"50");
+   json(response,200,{ok:true,runs:options.core.scheduler.runHistory({scheduleId:query.get("scheduleId")||undefined,projectId:query.get("projectId")||undefined,limit:Number.isFinite(limit)?limit:50})});return;
   }
   if(request.method==="POST"&&request.url==="/v1/scheduler/tick"){if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
    try{const runs=await options.core.scheduler.tick();json(response,200,{ok:true,runs});}
