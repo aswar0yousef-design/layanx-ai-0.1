@@ -154,6 +154,10 @@ jobs:
       - name: Windows smoke test (desktop, host, ACP, secrets, npm)
         shell: powershell
         run: .\scripts\windows\smoke-test.ps1 -Only core
+      - name: Uninstall and autostart scripts (temporary folders)
+        if: always()
+        shell: powershell
+        run: .\scripts\windows\uninstall-test.ps1
       - name: Windows smoke test (restricted isolation)
         if: always()
         shell: powershell

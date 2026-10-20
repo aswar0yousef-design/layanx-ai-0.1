@@ -12,7 +12,8 @@
   Console messages are in English on purpose: the classic Windows console does
   not shape Arabic text correctly. The control page in the browser is Arabic.
 #>
-param([switch]$NoBrowser)
+# -Unattended (used by the optional log-on task, see autostart.ps1): never prompt; every install offer is declined.
+param([switch]$NoBrowser, [switch]$Unattended)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
@@ -39,10 +40,10 @@ function Warn($m) { Write-Host "[LayanX] $m" -ForegroundColor Yellow }
 function Fail($m) {
   Write-Host "[LayanX] $m" -ForegroundColor Red
   Write-Host ''
-  Read-Host 'Press Enter to close' | Out-Null
+  if (-not $Unattended) { Read-Host 'Press Enter to close' | Out-Null }
   exit 1
 }
-function Ask($q) { $a = Read-Host "$q [Y/n]"; return ($a -eq '' -or $a -match '^(y|yes)$') }
+function Ask($q) { if ($Unattended) { Say "$q -> no (unattended)"; return $false }; $a = Read-Host "$q [Y/n]"; return ($a -eq '' -or $a -match '^(y|yes)$') }
 function Refresh-Path {
   $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }

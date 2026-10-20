@@ -14,8 +14,13 @@ try {
 }
 Remove-Item $pidFile -ErrorAction SilentlyContinue
 # Helper servers LayanX started from its own folder (Whisper, Piper, voice sense, Cohere ASR) hold GPU/RAM: stop them too.
+# Only when the data folder is a dedicated one: a broad LAYANX_DATA_DIR (drive root, profile, AppData) would match unrelated apps.
+$dd = $DataDir.TrimEnd('\')
+$broad = $dd.Length -le 3 -or (@($env:USERPROFILE, $env:LOCALAPPDATA, $env:APPDATA, $env:SystemRoot, $env:ProgramFiles) | Where-Object { $_ -and $_.TrimEnd('\') -ieq $dd })
+if ($broad) { Write-Host "[LayanX] Skipped helper cleanup: data folder '$DataDir' is not a dedicated LayanX folder." } else {
 try {
   Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { ($_.ExecutablePath -and $_.ExecutablePath.StartsWith($DataDir, [StringComparison]::OrdinalIgnoreCase)) -or ($_.CommandLine -and ($_.CommandLine -like '*piper.http_server*' -or $_.CommandLine -like '*voice-sense*server.py*' -or $_.CommandLine -like '*cohere_asr_server.py*') -and $_.CommandLine.IndexOf($DataDir, [StringComparison]::OrdinalIgnoreCase) -ge 0) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; Write-Host "[LayanX] stopped $($_.Name)" }
 } catch {}
+}
 Start-Sleep -Seconds 2

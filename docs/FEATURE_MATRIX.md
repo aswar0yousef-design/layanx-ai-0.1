@@ -29,7 +29,7 @@
 | الذاكرة النصية | Verified | `src/memory/*` | `memory*.spec`, `memory-arabic-hybrid.spec` | — | — |
 | الذاكرة الدلالية | HW | `memory/embedder.ts`, `vector-store.ts` | `semantic-memory.spec` | نموذج تضمين (`nomic-embed-text`) | — |
 | فرق الوكلاء | Partial | `core/team-runtime.ts` | `team-runtime.spec`, `agent-team-runtime.spec` | لا قفل ملفات بين الوكلاء | صفحة Team |
-| المجدول | Verified | `core/scheduler.ts` | `scheduler-*.spec`, **`scheduler-calendar-retry.spec` (جديد)** | لا يعمل والتطبيق مغلق (استخدم Windows Task Scheduler) | صفحة Schedules + `GET /v1/scheduler/runs` |
+| المجدول | Verified | `core/scheduler.ts` | `scheduler-*.spec`, **`scheduler-calendar-retry.spec` (جديد)** | لا يعمل والتطبيق مغلق؛ `autostart.ps1 -Enable` يشغّل LayanX عند تسجيل الدخول | صفحة Schedules + `GET /v1/scheduler/runs` |
 | System Doctor | Verified | **`src/system-doctor.ts`**, `doctor.ts` | **`system-doctor.spec` (جديد)**, `provider-doctor.spec` | — | `npm run doctor` |
 | الصوت | API / HW | `src/voice/*` | `voice-listen.spec`, `voice-local-tts.spec` وغيرها | OpenAI audio أو Whisper/Piper محلي | صفحة Voice |
 | إنتاج الفيديو (تجميع FFmpeg) | Partial | `creator/engine.ts` | `creator-engine.spec` | FFmpeg مثبت | — |
@@ -41,4 +41,4 @@
 | التداول (تحليل/Backtest/Paper) | Verified | `src/trading/*` | `trading-evaluation.spec`, `historical-backtest.spec` وغيرها | — | صفحة Trading |
 | التداول الحقيقي Binance/MT5 | API (مغلق افتراضيًا) | `trading/agent-integration.ts` | `trading-agent-integration.spec`, `trading-runtime-approval.spec`, `mt5-live-execution.spec` | `BINANCE_LIVE_TRADING_ENABLED=true` + L4 + حد قيمة | — |
 | Control Center | Partial | `web/*`, `src/control-center.ts` | `control-center.spec`, `control-center-ui.spec`, CI `windows` smoke؛ صفحتا التشخيص والجدولة فُحصتا بمتصفح حقيقي (Playwright) | داكن فقط؛ صفحات مفقودة: الذاكرة، المهارات، مركز الأمن، الوسائط، البريد، الشحن؛ نصوص الفحوص بالإنجليزية | `LayanX.cmd` ثم صفحة التشخيص |
-| تشغيل Windows (`LayanX.cmd`) | Partial | `LayanX.cmd`, `scripts/windows/*` | `bootstrap.spec`, CI windows | لا MSIX/WiX، لا إلغاء تثبيت | انقر `LayanX.cmd` |
+| تشغيل Windows (`LayanX.cmd`) | Partial | `LayanX.cmd`, `scripts/windows/*` | `bootstrap.spec`, CI windows, `uninstall-test.ps1` (CI windows) | لا مثبّت MSIX/WiX موقّع؛ إلغاء التثبيت والتشغيل التلقائي متوفران (سكربتات) | انقر `LayanX.cmd`؛ `LayanX-Uninstall.cmd` |
