@@ -67,7 +67,7 @@ try{
  const history=r.runHistory({scheduleId:job.id});
  assert.deepEqual(history.map(run=>run.attempt),[3,2,1]);
  assert.equal(r.runHistory({projectId:"other"}).length,0);
- await new Promise(resolve=>setTimeout(resolve,50));
+ await r.flush();
  const reloaded=new MissionScheduler(core,storage);await reloaded.hydrate();
  assert.equal(reloaded.runHistory({scheduleId:job.id}).length,3);
  assert.equal(reloaded.get(job.id)!.lastStatus,"failed");
@@ -76,7 +76,7 @@ try{
  const crashy=r.register({goal:"long",projectId:"proj-a",trigger:{kind:"once",runAt:new Date(Date.now()+5).toISOString()}});
  let release!:()=>void;hold=new Promise<void>(resolve=>{release=resolve;});
  const pending=r.tick(new Date(Date.now()+100));
- await new Promise(resolve=>setTimeout(resolve,50));
+ await new Promise(resolve=>setTimeout(resolve,50));await r.flush();
  const afterCrash=new MissionScheduler(core,RuntimeStorage.json(join(dir,"runtime.json")));await afterCrash.hydrate();
  const interrupted=afterCrash.runHistory({scheduleId:crashy.id});
  assert.equal(interrupted[0]?.status,"interrupted");
@@ -85,7 +85,11 @@ try{
  assert.equal(calls,before);
  assert.ok(audit.includes("schedule.run.interrupted"));
  hold=undefined;release();await pending;
- // Let fire-and-forget persistence settle before deleting the store.
- await new Promise(resolve=>setTimeout(resolve,200));
+ await r.flush();await afterCrash.flush();
+ // A failed background save is reported, not thrown as an unhandled rejection.
+ const failing=new MissionScheduler(core,{set:async()=>{throw new Error("disk full");},get:async()=>undefined,transaction:async()=>{throw new Error("disk full");}} as unknown as RuntimeStorage);
+ const warn=console.warn;let warned="";console.warn=(...args:unknown[])=>{warned+=args.join(" ");};
+ try{failing.register({goal:"x",projectId:"proj-a",trigger:{kind:"once",runAt:new Date(Date.now()+60000).toISOString()}});await failing.flush();}finally{console.warn=warn;}
+ assert.equal(failing.persistenceError,"disk full");assert.match(warned,/could not be saved: disk full/);
 }finally{rmSync(dir,{recursive:true,force:true});}
 console.log("scheduler calendar/timezone/retry/history: ok");

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — Scheduler save tracking
+
+### Fixed
+- `MissionScheduler` background saves are tracked: `flush()` waits for them, and a failed save is logged and exposed as `persistenceError` instead of becoming an unhandled promise rejection that would stop the process. The next save rewrites the full state.
+- Desktop "open app" by a Start-menu name: 45s limit (was 20s) and a clear message when the search is slow; the first `Get-StartApps` call on a cold machine timed out on Windows CI.
+- `scheduler-calendar-retry.spec.ts` no longer guesses with fixed sleeps (failed once on Windows CI with ENOENT when the temp folder was removed during a save).
+
 ## Unreleased — Skills in the Control Center
 
 ### Added

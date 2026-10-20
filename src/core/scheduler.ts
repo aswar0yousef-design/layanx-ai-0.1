@@ -143,8 +143,21 @@ export class MissionScheduler{
   }
   if(changed){this.persist();this.persistHistory();}
  }
- private persist(){if(this.storage)void this.storage.set([...this.schedules.values()].map(item=>structuredClone(item)),SCHEDULES_KEY);}
- private persistHistory(){if(this.storage)void this.storage.set(this.history.map(run=>structuredClone(run)),RUNS_KEY);}
+ private persist(){if(this.storage)this.track(this.storage.set([...this.schedules.values()].map(item=>structuredClone(item)),SCHEDULES_KEY));}
+ private persistHistory(){if(this.storage)this.track(this.storage.set(this.history.map(run=>structuredClone(run)),RUNS_KEY));}
+ // Saves run in the background; each one is tracked so `flush()` can wait for them, and a failed save is
+ // reported instead of becoming an unhandled rejection (which would stop the whole process). The next save
+ // writes the full state again, so one failure does not lose schedules that are still in memory.
+ private readonly writes=new Set<Promise<void>>();
+ private lastWriteError?:string;
+ private track(write:Promise<void>){
+  const tracked:Promise<void>=write.then(()=>{this.lastWriteError=undefined;},error=>{this.lastWriteError=error instanceof Error?error.message:String(error);console.warn("Scheduler state could not be saved:",this.lastWriteError);}).finally(()=>{this.writes.delete(tracked);});
+  this.writes.add(tracked);
+ }
+ /** Resolves when every background save started so far has finished. */
+ async flush():Promise<void>{while(this.writes.size)await Promise.allSettled([...this.writes]);}
+ /** Last save error, cleared by the next successful save. */
+ get persistenceError():string|undefined{return this.lastWriteError;}
  private record(run:SchedulerRun){
   const index=run.runId?this.history.findIndex(item=>item.runId===run.runId):-1;
   if(index>=0)this.history[index]=structuredClone(run);else this.history.push(structuredClone(run));
