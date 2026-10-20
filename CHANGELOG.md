@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Phase 2: Control Center diagnostics
+
+### Added
+- Control Center page "Diagnostics / التشخيص": live system doctor results (status, hints, GPU/RAM, installed Ollama models) with redacted JSON export. API: `GET /v1/system/doctor` (token-protected).
+- Schedules page: weekly option (day picker), browser IANA timezone sent with daily/weekly triggers, and a "Recent runs" list from `GET /v1/scheduler/runs` including `interrupted` runs.
+
 ## Unreleased — Phase 1: skills runtime integrity
 
 ### Added

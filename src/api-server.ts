@@ -1047,6 +1047,12 @@ export function startRuntimeApi(options:RuntimeApiOptions){
    }catch(error){json(response,422,{ok:false,error:error instanceof Error?error.message:"dependent mission execution failed"});}
    return;
   }
+  if(request.method==="GET"&&request.url==="/v1/system/doctor"){if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
+   // Live probes, secrets redacted. Same report as `npm run doctor -- --json` minus the port check (this server holds its own port).
+   try{const {systemDoctor,redactReport}=await import("./system-doctor.js");json(response,200,{ok:true,report:redactReport(await systemDoctor({timeoutMs:3000,ports:[]}))});}
+   catch(error){json(response,500,{ok:false,error:error instanceof Error?error.message:"doctor failed"});}
+   return;
+  }
   if(request.method==="GET"&&request.url==="/v1/scheduler"){if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
    json(response,200,{ok:true,schedules:options.core.scheduler.list()});return;
   }

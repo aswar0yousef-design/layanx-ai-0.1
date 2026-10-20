@@ -40,5 +40,5 @@
 | الشحن واللوجستيات | None | — | — | — | — |
 | التداول (تحليل/Backtest/Paper) | Verified | `src/trading/*` | `trading-evaluation.spec`, `historical-backtest.spec` وغيرها | — | صفحة Trading |
 | التداول الحقيقي Binance/MT5 | API (مغلق افتراضيًا) | `trading/agent-integration.ts` | `trading-agent-integration.spec`, `trading-runtime-approval.spec`, `mt5-live-execution.spec` | `BINANCE_LIVE_TRADING_ENABLED=true` + L4 + حد قيمة | — |
-| Control Center | Partial | `web/*`, `src/control-center.ts` | `control-center.spec`, `control-center-ui.spec`, CI `windows` smoke | داكن فقط؛ صفحات مفقودة (انظر AUDIT) | `npm run local` |
+| Control Center | Partial | `web/*`, `src/control-center.ts` | `control-center.spec`, `control-center-ui.spec`, CI `windows` smoke؛ صفحتا التشخيص والجدولة فُحصتا بمتصفح حقيقي (Playwright) | داكن فقط؛ صفحات مفقودة: الذاكرة، المهارات، مركز الأمن، الوسائط، البريد، الشحن؛ نصوص الفحوص بالإنجليزية | `LayanX.cmd` ثم صفحة التشخيص |
 | تشغيل Windows (`LayanX.cmd`) | Partial | `LayanX.cmd`, `scripts/windows/*` | `bootstrap.spec`, CI windows | لا MSIX/WiX، لا إلغاء تثبيت | انقر `LayanX.cmd` |
