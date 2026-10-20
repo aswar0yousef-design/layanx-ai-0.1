@@ -21,6 +21,7 @@
 | قراءة الويب `browser.read` / `http.read` / `media.inspect` | Verified | `tools/fabric.ts`, `tools/http-read.ts`, `business/media.ts`, `security/network-guard.ts` (`pinnedFetch`) | `http-read-tool.spec`, `tool-sandbox-escape.spec`, `dns-pinning.spec`, `media-manager.spec` + فحص HTTPS حي | DNS rebinding مغلق (R1)؛ التحويلات لا تُتبع تلقائيًا | — |
 | متصفح تفاعلي Playwright | Partial | `autonomy/browser-test.ts` | `autonomy-browser.spec` | `playwright-core` اختياري؛ لاختبار الواجهات فقط | — |
 | التحكم بسطح مكتب Windows | HW | `tools/desktop-control.ts` | CI job `windows` | Windows فقط | — |
+| طلبات سطح المكتب المركبة (افتح + شغّل + ابحث) بدون نموذج | Implemented, Partially Verified | `tools/open-app.ts`, `desktop-control.ts` (`play`)، `autonomy/supervisor.ts` | `desktop-compound-requests.spec` + بحث يوتيوب حي | التشغيل الفعلي في Chrome لم يُختبر على جهازك بعد | — |
 | Coding Mission / Safe Code Modifier | Partial | `core/safe-code-modifier.ts`, `core/code-review-agent.ts` | `safe-code-modifier.spec` | — | — |
 | الإصلاح الذاتي | Partial | `autonomy/supervisor.ts`, `autonomy/*` | `autonomous-repair.spec` | حدود محاولات موجودة | — |
 | Verification Engine | Partial | `core/verification.ts` | `verification-hardening.spec`, `verification-integration-hardening.spec` | — | — |

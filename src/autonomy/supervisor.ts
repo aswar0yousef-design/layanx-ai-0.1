@@ -86,7 +86,7 @@ export function wantsOpenWhenDone(text:string):boolean{return OPEN_WHEN_DONE.tes
  * Recognise a simple, explicit app-opening request so the supervisor does not invent a research
  * milestone for a local Windows action. Only known apps/URLs accepted by openRequest are fast-pathed.
  */
-function directDesktopOpenGoal(text:string):{app?:string;url?:string;label:string;command:string}|undefined{
+function directDesktopOpenGoal(text:string):{app?:string;url?:string;play?:string;label:string;command:string;windowTitle?:string}|undefined{
   if(text.length>240||text.includes("\n"))return undefined;
   let command=text.trim()
     .replace(/(?:[،,;؛.]?\s*)(?:وتأكد(?:\s+من)?|وتحقق(?:\s+من)?|وتاكد(?:\s+من)?|وتثبت(?:\s+من)?|تأكد من نجاح|تحقق من نجاح|and\s+(?:verify|confirm|check|make sure)|then\s+(?:verify|confirm|check)|make sure(?:\s+that)?|verify(?:\s+that)?|confirm(?:\s+that)?)[\s\S]*$/iu,"")
@@ -96,9 +96,15 @@ function directDesktopOpenGoal(text:string):{app?:string;url?:string;label:strin
     .replace(/المفكر[هة]\s+notepad$/iu,"Notepad")
     .replace(/[،,;؛.!؟?]+$/u,"")
     .trim();
+  // Every program/site/video request openRequest understands (it used to be Notepad only, so «افتح كروم
+  // وافتح يوتيوب وشغّل …» went to the cloud planner and came back as a research/coding mission).
   const request=openRequest(command);
-  if(!request||!request.app||request.label.toLowerCase()!=="notepad")return undefined;
-  return{...request,command:"افتح Notepad"};
+  if(!request)return undefined;
+  if(request.app&&request.label.toLowerCase()==="notepad"&&!request.url)return{...request,command:"افتح Notepad",windowTitle:"Notepad"};
+  // The window to look for afterwards: a page's title (YouTube, Google) or the program's name; a bare web
+  // address has no predictable title, so it gets no window check.
+  const windowTitle=request.windowTitle??(request.url?undefined:request.label);
+  return{...request,command,...(windowTitle?{windowTitle}:{})};
 }
 
 const MAX_ATTEMPTS=4;
@@ -316,10 +322,10 @@ export class Supervisor{
     const directOpen=directDesktopOpenGoal(job.goal);
     if(directOpen){
       spec={
-        acceptance:[`تم فتح ${directOpen.label} بنجاح`,`نافذة ${directOpen.label} ظاهرة على سطح المكتب`],
+        acceptance:[`تم فتح ${directOpen.label} بنجاح`,...(directOpen.windowTitle?[`نافذة ${directOpen.windowTitle} ظاهرة على سطح المكتب`]:[])],
         milestones:[
           {title:`فتح ${directOpen.label}`,goal:directOpen.command,kind:"desktop"},
-          {title:"التحقق من النافذة",goal:`تحقق من أن نافذة ${directOpen.label} ظاهرة على سطح مكتب Windows باستخدام أدوات قراءة النوافذ أو شجرة الواجهة، ولا تغلق التطبيق.`,kind:"desktop"}
+          ...(directOpen.windowTitle?[{title:"التحقق من النافذة",goal:`تحقق من أن نافذة «${directOpen.windowTitle}» ظاهرة على سطح مكتب Windows باستخدام أدوات قراءة النوافذ أو شجرة الواجهة، ولا تغلق التطبيق.`,kind:"desktop" as const}]:[])
         ],
         checks:{install:false,test:false,build:false,typecheck:false,lint:false,security:false,browser:null}
       };

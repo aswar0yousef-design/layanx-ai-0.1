@@ -70,7 +70,11 @@ const OPEN_VERB=/^(?:(?:يا\s+)?(?:ليان|جارفيس)[\s،,]+)?(?:لو سم
  * A short "open X" request whose X is certainly something to open: a known program, a Start-menu
  * name LayanX knows, or a web address. Anything else ("open the report file") goes to the planner.
  */
-export function openRequest(text:string):{app?:string;url?:string;label:string}|null{
+export type OpenRequest={app?:string;url?:string;play?:string;label:string;windowTitle?:string};
+export function openRequest(text:string):OpenRequest|null{
+  return singleOpenRequest(text)??compoundOpenRequest(text);
+}
+function singleOpenRequest(text:string):OpenRequest|null{
   const t=text.trim();
   if(!t||t.length>90||t.includes("\n"))return null;
   const m=t.match(OPEN_VERB);if(!m)return null;
@@ -88,4 +92,103 @@ export function openRequest(text:string):{app?:string;url?:string;label:string}|
   const mapped=START_BY_NAME.get(norm(target));
   if(mapped)return{app:mapped,label:mapped};
   return null;
+}
+
+/** Well-known sites by the names people say («يوتيوب», "gmail"). Only fixed https addresses. */
+const SITES={
+  youtube:{url:"https://www.youtube.com/",title:"YouTube"},google:{url:"https://www.google.com/",title:"Google"},
+  gmail:{url:"https://mail.google.com/",title:"Gmail"},maps:{url:"https://www.google.com/maps",title:"Google Maps"},
+  facebook:{url:"https://www.facebook.com/",title:"Facebook"},instagram:{url:"https://www.instagram.com/",title:"Instagram"},
+  tiktok:{url:"https://www.tiktok.com/",title:"TikTok"},x:{url:"https://x.com/",title:"X"},
+  whatsappweb:{url:"https://web.whatsapp.com/",title:"WhatsApp"},github:{url:"https://github.com/",title:"GitHub"},
+  chatgpt:{url:"https://chatgpt.com/",title:"ChatGPT"}
+} satisfies Record<string,{url:string;title:string}>;
+const SITE_NAMES:Record<string,keyof typeof SITES>={
+  "يوتيوب":"youtube","اليوتيوب":"youtube","يوتوب":"youtube","اليوتوب":"youtube","youtube":"youtube","موقع يوتيوب":"youtube",
+  "جوجل":"google","قوقل":"google","غوغل":"google","google":"google","بحث جوجل":"google",
+  "جيميل":"gmail","الجيميل":"gmail","gmail":"gmail","بريدي":"gmail",
+  "خرائط جوجل":"maps","خرائط قوقل":"maps","الخرائط":"maps","google maps":"maps",
+  "فيسبوك":"facebook","الفيسبوك":"facebook","فيس بوك":"facebook","facebook":"facebook",
+  "انستقرام":"instagram","انستغرام":"instagram","الانستقرام":"instagram","انستا":"instagram","instagram":"instagram",
+  "تيك توك":"tiktok","تيكتوك":"tiktok","tiktok":"tiktok","تويتر":"x","twitter":"x",
+  "واتساب ويب":"whatsappweb","whatsapp web":"whatsappweb","جيت هب":"github","github":"github","شات جي بي تي":"chatgpt","chatgpt":"chatgpt"
+};
+const SITE_BY_NAME=new Map(Object.entries(SITE_NAMES).map(([k,v])=>[norm(k),v]));
+const VERB_OPEN=/^(?:افتح|إفتح|أفتح|افتحلي|ادخل(?:\s+على)?|روح(?:\s+على|\s+ل)?|open|go to|launch|start|run)$/iu;
+const VERB_PLAY=/^(?:شغل|شغّل|شغلي|play|اعرض)$/iu;
+const MEDIA_WORDS=/(?:سوره|القران|قران|تلاوه|اغنيه|اغاني|نشيد|اناشيد|فيديو|مقطع|بودكاست|موسيقى|محاضره|خطبه|\bsong\b|\bmusic\b|\bvideo\b|\bpodcast\b|\bsurah\b|\bquran\b)/u;
+const VERB_SEARCH=/^(?:ابحث|إبحث|دور|دوّر|دورلي|search)$/iu;
+/**
+ * «افتح كروم وافتح يوتيوب وشغّل سورة الكهف», "open chrome and search for gold prices": a short chain of
+ * open / play / search steps that ends in ONE thing to open — a browser on a page. Planned without the
+ * model (the model used to turn these into research or coding missions). Anything not understood in
+ * full (two different programs, a file, an unknown verb) returns null and goes to the planner.
+ */
+function compoundOpenRequest(text:string):OpenRequest|null{
+  const t=text.trim().replace(/^(?:(?:يا\s+)?(?:ليان|جارفيس)[\s،,]+)?(?:لو سمحت|من فضلك|please)\s*/iu,"");
+  if(!t||t.length>240||t.includes("\n"))return null;
+  // Split on «و/ثم» before a verb, commas, "and/then".
+  const clauses=t.split(/\s*[،,;؛]\s*|\s+(?:ثم|بعدين|بعدها|and then|then|and)\s+|\s+و(?=\s*(?:افتح|إفتح|أفتح|ادخل|روح|شغل|شغّل|ابحث|إبحث|دور|دوّر|اعرض|ثم|تأكد|تاكد|تحقق))/iu)
+    .map(c=>c.trim().replace(/^و\s*/u,"").replace(/^(?:ثم|بعدين)\s+/u,"").replace(/[.!؟?]+$/u,"").trim()).filter(Boolean)
+    // "…and make sure it worked": the window check that follows the opening covers it.
+    .filter(c=>!/^(?:تأكد|تاكد|تحقق|verify|confirm|check|make sure)(?:\s|$)/iu.test(c));
+  if(clauses.length<1||clauses.length>4)return null;
+  let anyBrowser=false;let browser:string|undefined;let site:keyof typeof SITES|undefined;let play:string|undefined;let search:string|undefined;let page:string|undefined;
+  const onSite=(object:string)=>{ // "… على يوتيوب" / "… in youtube"
+    const m=object.match(/^(.+?)\s+(?:على|في|من|ب|on|in|from)\s+(?:موقع\s+)?(\S+(?:\s+\S+)?)$/iu);
+    if(m){const key=SITE_BY_NAME.get(norm(m[2]!));if(key){site=key;return m[1]!.trim();}}
+    return object;
+  };
+  for(const clause of clauses){
+    const m=clause.match(/^(\S+)(?:\s+(?:لي|لنا))?\s+(?:عن\s+|على\s+|for\s+)?([\s\S]+)$/u);
+    if(!m)return null;
+    const verb=m[1]!;let object=m[2]!.trim();
+    // «افتح المتصفح» / "open the browser": the default browser.
+    if(VERB_OPEN.test(verb)&&/^(?:ال)?متصفح$|^(?:the\s+|web\s+)?browser$|^(?:ال)?[اإ]نترنت$/iu.test(object)){anyBrowser=true;continue;}
+    object=object.replace(/^(?:برنامج|تطبيق|موقع|متصفح|the\s+)\s*/iu,"").trim();
+    // «ابحث في يوتيوب عن X» / "search youtube for X"
+    const inSite=object.match(/^(?:في|على|on|in)?\s*(?:موقع\s+)?(\S+(?:\s+\S+)?)\s+(?:عن|for)\s+(.+)$/iu);
+    if(inSite&&VERB_SEARCH.test(verb)){const key=SITE_BY_NAME.get(norm(inSite[1]!));if(key){site=key;object=inSite[2]!.trim();}}
+    if(!object)return null;
+    const known=KNOWN_BY_NAME.get(norm(object));
+    const siteKey=SITE_BY_NAME.get(norm(object));
+    const address=webAddress(object);
+    if(VERB_OPEN.test(verb)||(VERB_PLAY.test(verb)&&(known||siteKey))){
+      if(known){if(!KNOWN_APPS[known].browser)return null;if(browser&&norm(browser)!==norm(object))return null;browser=object;continue;}
+      if(siteKey){site=siteKey;continue;}
+      if(address){page=address;continue;}
+      return null;
+    }
+    if(VERB_PLAY.test(verb)){object=onSite(object);if(object.length<2||object.length>150)return null;play=object;continue;}
+    if(VERB_SEARCH.test(verb)){object=onSite(object);if(object.length<2||object.length>150)return null;search=object;continue;}
+    return null;
+  }
+  // Exactly one destination: a played video, a search, a page or a site — or just the browser.
+  if([play,search,page].filter(Boolean).length>1)return null;
+  if(!browser&&!anyBrowser&&!site&&!play&&!search&&!page)return null;
+  // «شغّل الاختبارات» is a development task and «ابحث عن أسعار الذهب» a research question: neither may turn into a web
+  // page. "Play" goes to YouTube only with a named site/browser or a clear media word; "search" opens a
+  // results page only when the owner also asked for a browser or a site.
+  const opened=Boolean(browser||anyBrowser||site||page);
+  if(play&&!opened&&!MEDIA_WORDS.test(norm(play)))return null;
+  if(search&&!opened)return null;
+  const browserApp=browser?KNOWN_BY_NAME.get(norm(browser)):undefined;
+  const browserTitle=browserApp?KNOWN_APPS[browserApp].label:undefined;
+  let url:string;let label:string;let windowTitle:string|undefined;
+  if(play){url="https://www.youtube.com/results?search_query="+encodeURIComponent(play);label="YouTube: "+play;windowTitle="YouTube";}
+  else if(search){
+    const yt=site==="youtube";
+    url=yt?"https://www.youtube.com/results?search_query="+encodeURIComponent(search):"https://www.google.com/search?q="+encodeURIComponent(search);
+    label=(yt?"YouTube: ":"Google: ")+search;windowTitle=yt?"YouTube":"Google";
+  }else if(page){url=page;label=page;windowTitle=browserTitle;}
+  else if(site){url=SITES[site].url;label=SITES[site].title;windowTitle=SITES[site].title;}
+  else if(browser)return{app:browser,label:browserTitle!,windowTitle:browserTitle};
+  else{url=SITES.google.url;label=SITES.google.title;windowTitle=SITES.google.title;}
+  return{...(browser?{app:browser}:{}),url,...(play?{play}:{}),label,...(windowTitle?{windowTitle}:{})};
+}
+
+/** First video id on a YouTube results page (the page embeds them as "videoId":"<11 chars>"). */
+export function firstYouTubeVideoId(html:string):string|null{
+  const m=html.match(/"videoRenderer":\{"videoId":"([A-Za-z0-9_-]{11})"/)??html.match(/"videoId":"([A-Za-z0-9_-]{11})"/);
+  return m?m[1]!:null;
 }

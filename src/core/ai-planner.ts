@@ -35,19 +35,21 @@ function currentMilestoneGoal(goal:string):string{
 /** A window-presence check is deterministic too: ask Windows to focus that exact window title. */
 function deterministicDesktopWindowCheck(goal:string,catalog:ToolCatalogEntry[]):PlannedMission|undefined{
  const step=currentMilestoneGoal(goal);
- const mentionsNotepad=/(?:notepad|المفكرة|المفكره)/iu.test(step);
+ // The supervisor names the window title in «…» (e.g. «YouTube», «Google Chrome»); older jobs say Notepad.
+ const quoted=step.match(/(?:نافذة|window)\s*«([^»]{1,80})»/iu)?.[1]?.trim();
+ const title=quoted??(/(?:notepad|المفكرة|المفكره)/iu.test(step)?"Notepad":undefined);
  const isCheck=/(?:تحقق|تأكد|افحص|verify|confirm|check)/iu.test(step);
  const isWindow=/(?:نافذة|window)/iu.test(step);
- if(!mentionsNotepad||!isCheck||!isWindow)return undefined;
+ if(!title||!isCheck||!isWindow)return undefined;
  const tool=catalog.find(item=>item.name==="desktop.window.find"&&item.actions.some(action=>action.toLowerCase()==="desktop find window"));
  if(!tool)return undefined;
  return{
   risk:"low",
   requiredPermission:tool.permission,
-  steps:[{description:"Inspect the Windows UI Automation window list and confirm that Notepad is present."}],
-  successCriteria:["result.exists === true","result.visible === true",'result.title contains "Notepad"'],
+  steps:[{description:`Inspect the Windows UI Automation window list and confirm that ${title} is present.`}],
+  successCriteria:["result.exists === true","result.visible === true",`result.title contains "${title}"`],
   stopCondition:"Stop and report the window-verification result; do not use a window-focus action just to verify visibility.",
-  tools:[{tool:tool.name,action:"desktop find window",permission:tool.permission,reason:"The owner asked to confirm that the Notepad window is open; this read-only check does not change focus.",payload:{title:"Notepad"}}]
+  tools:[{tool:tool.name,action:"desktop find window",permission:tool.permission,reason:`The owner asked to confirm that the ${title} window is open; this read-only check does not change focus.`,payload:{title}}]
  };
 }
 
@@ -61,7 +63,7 @@ function deterministicOpenPlan(goal:string,catalog:ToolCatalogEntry[]):PlannedMi
   successCriteria:["The program or web page was opened."],
   stopCondition:"Stop if the program is not installed or the web address is not valid.",
   tools:[{tool:tool.name,action:tool.actions[0]!,permission:tool.permission,reason:"The owner asked to open "+request.label+".",
-   payload:{...(request.app?{app:request.app}:{}),...(request.url?{url:request.url}:{})},final:true}]};
+   payload:{...(request.app?{app:request.app}:{}),...(request.url?{url:request.url}:{}),...(request.play?{play:request.play}:{})},final:true}]};
 }
 
 function deterministicDevelopmentPlan(goal:string,catalog:ToolCatalogEntry[]):PlannedMission|undefined{
