@@ -43,6 +43,9 @@ try{
  for(const c of calls){assert.equal(c.url,"https://api.openai.com/v1/images/generations");assert.equal(c.auth,"Bearer "+KEY);assert.equal(c.body.size,"1024x1536");assert.equal(c.body.model,"gpt-image-1");assert.equal(c.body.quality,"low");assert.equal(c.body.output_format,"png");}
  for(const s of done.scenes){assert.ok(s.assetPath&&existsSync(s.assetPath));assert.deepEqual([...readFileSync(s.assetPath).subarray(0,4)],[0x89,0x50,0x4e,0x47]);}
  // and the real renderer turns them into an MP4 when ffmpeg is installed
+ // containment holds on every OS (separator-aware): outside paths and the root itself are refused
+ await assert.rejects(()=>engine.render(project.id,join(root,"..","escape.mp4")),/creator_output_outside_workspace/);
+ await assert.rejects(()=>engine.render(project.id,root),/creator_output_outside_workspace/);
  if(spawnSync(process.env.LAYANX_FFMPEG_PATH??"ffmpeg",["-version"]).status===0){const rendered=await engine.render(project.id);assert.ok(rendered.outputPath&&statSync(rendered.outputPath).size>1000);console.log("rendered",rendered.outputPath);}
  else console.log("ffmpeg not installed: render step skipped");
 }finally{

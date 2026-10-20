@@ -3,6 +3,7 @@ import {join,resolve} from "node:path";
 import {randomUUID} from "node:crypto";
 import {spawn} from "node:child_process";
 import type {CreatorDoctorReport,CreatorEngineOptions,CreatorPlanInput,CreatorProject,CreatorScene} from "./types.js";
+import {isPathInside} from "../platform/path-guard.js";
 import {cleanText,humanizeText,humanizerMode,loadVoice,qualityOf,scanText} from "../business/humanizer.js";
 const now=()=>new Date().toISOString();
 const clamp=(n:number,min:number,max:number)=>Math.min(Math.max(n,min),max);
@@ -65,8 +66,9 @@ export class CreatorEngine{
  async render(id:string,outputPath?:string){
   const project=this.load(id);if(project.scenes.some(s=>!s.assetPath))throw new Error("creator_scene_assets_required");
   const ffmpeg=process.env.LAYANX_FFMPEG_PATH??"ffmpeg";if(!(await commandExists(ffmpeg)))throw new Error("ffmpeg_not_available");
-  const out=resolve(outputPath??join(this.root,safeName(project.id),safeName(project.title)+".mp4"));const rootPrefix=this.root.endsWith("/")?this.root:this.root+"/";if(!out.startsWith(rootPrefix))throw new Error("creator_output_outside_workspace");
-  const width=project.aspectRatio==="16:9"?1920:1080;const height=project.aspectRatio==="16:9"?1080:1920;const args:string[]=[];project.scenes.forEach(scene=>{const asset=resolve(scene.assetPath!);if(!asset.startsWith(rootPrefix))throw new Error("creator_asset_outside_workspace");args.push("-loop","1","-t",String(scene.durationSec),"-i",asset);});
+  const out=resolve(outputPath??join(this.root,safeName(project.id),safeName(project.title)+".mp4"));// Separator-aware containment (Windows uses "\\"): the old "/" prefix check refused every render on Windows.
+  if(!isPathInside(this.root,out)||resolve(out)===this.root)throw new Error("creator_output_outside_workspace");
+  const width=project.aspectRatio==="16:9"?1920:1080;const height=project.aspectRatio==="16:9"?1080:1920;const args:string[]=[];project.scenes.forEach(scene=>{const asset=resolve(scene.assetPath!);if(!isPathInside(this.root,asset))throw new Error("creator_asset_outside_workspace");args.push("-loop","1","-t",String(scene.durationSec),"-i",asset);});
   const filters=project.scenes.map((_,i)=>"["+i+":v]scale="+width+":"+height+":force_original_aspect_ratio=decrease,pad="+width+":"+height+":(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v"+i+"]").join(";");const concat=project.scenes.map((_,i)=>"[v"+i+"]").join("")+"concat=n="+project.scenes.length+":v=1:a=0[v]";
   args.push("-filter_complex",filters+";"+concat,"-map","[v]");
   const audio=join(this.root,safeName(project.id),"voice.wav");if(existsSync(audio)){args.push("-i",audio,"-map","1:a:0","-shortest");}
