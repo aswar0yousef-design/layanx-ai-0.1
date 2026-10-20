@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — Skills in the Control Center
+
+### Added
+- `GET /v1/skills/installed` (token-protected, read-only): installed packages with version, previous version, permissions, network hosts, source, scan findings, review status and a live checksum check.
+- Tools page: skill status pills are coloured by state, and a full-width "Installed skill packages" card shows intact / changed-after-install and the local commands to approve or enable (permission changes stay on this computer). Verified in Chromium, including a tampered package that is rejected after restart.
+
+## Unreleased — PostgreSQL verified, dependency audit
+
+### Added
+- `tests/postgres-storage.spec.ts` against a real PostgreSQL (verified locally on 17.6): commit, rollback on error and explicit, closed-transaction writes refused, 20 concurrent writers, health (wrong password reported without echoing it), and approval restart recovery through `RuntimePersistence`.
+- `scripts/postgres-runtime-check.ts`: `createRuntime` + `restoreRuntime` on `LAYANX_DATABASE_URL`, health probe row must be fresh in PostgreSQL.
+- CI: job `postgres` (service `postgres:17`, `LAYANX_REQUIRE_POSTGRES=1`), and `npm audit --audit-level=high` in the Linux quality job (currently 0 vulnerabilities).
+
+### Fixed
+- `RuntimePersistence` used the configurable snapshot key for `save`/`list` but a hard-coded `"runtime:snapshots"` in its transactional methods; all now use `RuntimeStorage.snapshotKey` (no change with the default key).
+
+## Unreleased — Creator images (OpenAI)
+
+### Added
+- `creator.generate_assets` can use OpenAI Images when `LAYANX_CREATOR_IMAGE_PROVIDER=openai` and `OPENAI_API_KEY` are set (opt-in, billed per image; local command and ComfyUI keep priority). Size follows the project aspect (1024x1536 / 1536x1024 / 1024x1024), default model `gpt-image-1`, quality `low`. Output must be a real PNG; API errors never echo the key. `creator.doctor` lists `openai-images`.
+- Test `creator-comfyui.spec.ts`: the existing ComfyUI adapter against a local HTTP server (placeholder substitution, polling, PNG download, error status).
+- Test `creator-openai-images.spec.ts`: no call unless selected, missing key, 401 without key leak, non-PNG refused, request shape, PNG files, and a real FFmpeg render to MP4.
+
 ## Unreleased — DNS pinning (R1)
 
 ### Security

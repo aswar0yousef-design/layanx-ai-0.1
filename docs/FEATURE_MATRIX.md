@@ -10,7 +10,7 @@
 | الصلاحيات L1–L5 والموافقات | Verified | `src/security/*` (`approval.ts`) | `approval-restart-recovery.spec`, `red-team.spec` | — | صفحة Approvals |
 | عزل المشاريع | Verified | `security/project-isolation.ts`, `memory/*` | `project-memory-isolation.spec`, `memory-scoped-recall.spec` | — | — |
 | التخزين JSON/SQLite | Verified | `src/storage/*` | `runtime-storage.spec`, `scheduler-persistence.spec` | — | — |
-| PostgreSQL | Partial | `storage/postgres-adapter.ts` | `business-postgres-fallback.spec` (بدون قاعدة حقيقية) | لم يُختبر مقابل خادم Postgres فعلي في CI | تعيين `DATABASE_URL` |
+| PostgreSQL | Verified | `storage/postgres-adapter.ts` | `postgres-storage.spec` مقابل PostgreSQL 17 حقيقي (commit/rollback، تزامن، health، استرداد بعد إعادة تشغيل) + `scripts/postgres-runtime-check.ts`؛ CI job `postgres` | الهجرات: جدول KV واحد؛ لا تقارير SQL | `LAYANX_DATABASE_URL=postgres://...` |
 | التعافي والاستئناف | Verified | `core/runtime-recovery.ts`, `recovery-*` | 15+ ملف `recovery-*.spec` | المعاملات الخارجية لا تُضمن مرة واحدة | — |
 | Ollama (محلي) | HW | `src/providers/*`, `models/http-providers.ts`, `models/inference.ts` | `provider-doctor.spec` (transport محقون) | Ollama + نموذج مثبت؛ الاستدلال الحقيقي لم يُتحقق منه في بيئة التدقيق | `npm run doctor` ثم `npm run smoke:ollama` |
 | OpenAI / Anthropic / Gemini | API | `providers/*-provider.ts` | `provider-doctor.spec`, `cloud-provider-adapters.spec` | مفاتيح API عبر `npm run secrets` | `npm run doctor` |
@@ -33,7 +33,7 @@
 | System Doctor | Verified | **`src/system-doctor.ts`**, `doctor.ts` | **`system-doctor.spec` (جديد)**, `provider-doctor.spec` | — | `npm run doctor` |
 | الصوت | API / HW | `src/voice/*` | `voice-listen.spec`, `voice-local-tts.spec` وغيرها | OpenAI audio أو Whisper/Piper محلي | صفحة Voice |
 | إنتاج الفيديو (تجميع FFmpeg) | Partial | `creator/engine.ts` | `creator-engine.spec` | FFmpeg مثبت | — |
-| توليد الصور/الفيديو بنماذج | None | — | — | يحتاج مزودًا (OpenAI Images / Gemini / ComfyUI) | — |
+| توليد الصور لمشاهد الفيديو | Partial | `creator/engine.ts` (أمر محلي، ComfyUI، OpenAI Images) | `creator-openai-images.spec` (نقل وهمي + PNG حقيقي + تصيير FFmpeg فعلي إلى MP4)، `creator-comfyui.spec` (خادم HTTP محلي يحاكي ComfyUI) | OpenAI: API (مدفوع، يحتاج `OPENAI_API_KEY` و`LAYANX_CREATOR_IMAGE_PROVIDER=openai`)؛ ComfyUI: نموذج محلي؛ لا توليد فيديو بنموذج (التصيير FFmpeg من صور) | `creator.generate_assets` ثم `creator.render` |
 | التجارة الإلكترونية | API | `src/business/*`, `platforms/*` | `business-manager.spec`, `business-postgres-fallback.spec` | مفاتيح WooCommerce/Shopify؛ النشر بموافقة | صفحة Ecommerce |
 | البريد و Google | API | `connectors/google-workspace.ts`, `connectors/yahoo-mail.ts` | `google-workspace.spec`, `yahoo-mail.spec` | OAuth / IMAP | صفحة Integrations |
 | التواصل الاجتماعي | API | `business/native-social.ts` (Facebook/Instagram Graph، TikTok، YouTube، X، Pinterest، LinkedIn) + موصل عام | `native-social.spec`, `pinterest-native.spec`, `social-connector.spec`, `social-publication-recovery.spec` | حسابات ومراجعة تطبيق لكل منصة؛ النشر بموافقة؛ لم يُختبر مقابل المنصات الحقيقية | — |

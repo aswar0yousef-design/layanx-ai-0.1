@@ -89,17 +89,17 @@ export class RuntimePersistence{
   async saveAtomic(snapshot:RuntimeSnapshot):Promise<void>{
     this.validate(snapshot);
     await this.storage.transaction(async tx=>{
-      const current=(await tx.get<RuntimeSnapshot[]>("runtime:snapshots"))??[];
+      const current=(await tx.get<RuntimeSnapshot[]>(this.storage.snapshotKey))??[];
       const next=current.filter(x=>x.mission.id!==snapshot.mission.id);
       next.push(structuredClone(snapshot));
-      await tx.set("runtime:snapshots",next);
+      await tx.set(this.storage.snapshotKey,next);
     });
   }
   /** A mission the owner deleted: its snapshot goes too, so it does not come back after a restart. */
   async remove(missionId:string):Promise<void>{
     await this.storage.transaction(async tx=>{
-      const current=(await tx.get<RuntimeSnapshot[]>("runtime:snapshots"))??[];
-      if(current.some(x=>x.mission.id===missionId))await tx.set("runtime:snapshots",current.filter(x=>x.mission.id!==missionId));
+      const current=(await tx.get<RuntimeSnapshot[]>(this.storage.snapshotKey))??[];
+      if(current.some(x=>x.mission.id===missionId))await tx.set(this.storage.snapshotKey,current.filter(x=>x.mission.id!==missionId));
     });
   }
   /** Remove obsolete approval requests from every persisted snapshot, since each snapshot stores a shared approval catalogue. */
@@ -107,7 +107,7 @@ export class RuntimePersistence{
     const targets=new Set(missionIds.filter(id=>typeof id==="string"&&id.length>0));
     if(!targets.size)return;
     await this.storage.transaction(async tx=>{
-      const current=await tx.get<RuntimeSnapshot[]>("runtime:snapshots")??[];
+      const current=await tx.get<RuntimeSnapshot[]>(this.storage.snapshotKey)??[];
       let changed=false;
       const next=current.map(raw=>{
         const snapshot=this.migrate(raw);
@@ -126,7 +126,7 @@ export class RuntimePersistence{
           }
         };
       });
-      if(changed)await tx.set("runtime:snapshots",next);
+      if(changed)await tx.set(this.storage.snapshotKey,next);
     });
   }
 
@@ -176,7 +176,7 @@ export class RuntimePersistence{
   async cleanup(retentionMs=7*24*60*60*1000,now=Date.now()):Promise<{removed:number;kept:number}>{
     if(retentionMs<0)throw new Error("Snapshot retention must be non-negative.");
     return this.storage.transaction(async tx=>{
-      const raw=await tx.get<unknown[]>("runtime:snapshots")??[];
+      const raw=await tx.get<unknown[]>(this.storage.snapshotKey)??[];
       const snapshots=raw.map(snapshot=>this.migrate(snapshot));
       snapshots.forEach(snapshot=>this.validate(snapshot));
       const cutoff=now-retentionMs;
@@ -189,7 +189,7 @@ export class RuntimePersistence{
           (snapshot.mission.status==="blocked"&&snapshot.approvals?.requests.some(request=>Date.parse(request.expiresAt)>Date.now()&&!snapshot.approvals?.approvedIds.includes(request.id)));
         return resumable||Date.parse(snapshot.savedAt)>=cutoff;
       });
-      await tx.set("runtime:snapshots",kept);
+      await tx.set(this.storage.snapshotKey,kept);
       return{removed:snapshots.length-kept.length,kept:kept.length};
     });
   }

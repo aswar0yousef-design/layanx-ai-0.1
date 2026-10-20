@@ -58,3 +58,13 @@ npm run smoke:ollama           # استدلال حقيقي
 ```
 
 نتيجة آخر تشغيل كامل: انظر قسم "النتائج" في `AUDIT-2026-10-20.md` و`CHANGELOG.md`.
+
+
+### PostgreSQL الحقيقي
+
+```powershell
+$env:LAYANX_TEST_DATABASE_URL = "postgres://user:pass@127.0.0.1:5432/layanx_test"
+npx tsx tests/postgres-storage.spec.ts
+```
+
+بدون المتغير يطبع الاختبار `SKIPPED` صراحةً (ولا يُحسب تحققًا). في CI يعمل job `postgres` بحاوية `postgres:17` مع `LAYANX_REQUIRE_POSTGRES=1`، فغياب القاعدة هناك فشل. يحذف الاختبار صفوفه فقط (بادئة عشوائية).

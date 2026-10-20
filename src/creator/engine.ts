@@ -3,6 +3,7 @@ import {join,resolve} from "node:path";
 import {randomUUID} from "node:crypto";
 import {spawn} from "node:child_process";
 import type {CreatorDoctorReport,CreatorEngineOptions,CreatorPlanInput,CreatorProject,CreatorScene} from "./types.js";
+import {isPathInside} from "../platform/path-guard.js";
 import {cleanText,humanizeText,humanizerMode,loadVoice,qualityOf,scanText} from "../business/humanizer.js";
 const now=()=>new Date().toISOString();
 const clamp=(n:number,min:number,max:number)=>Math.min(Math.max(n,min),max);
@@ -11,6 +12,20 @@ function splitScript(text:string){return text.split(/(?<=[.!?؟。])\s+/).map(x=
 async function commandExists(command:string){return new Promise<boolean>(resolveResult=>{const p=spawn(command,["-version"],{stdio:"ignore"});p.on("error",()=>resolveResult(false));p.on("close",code=>resolveResult(code===0));});}
 function argsFromEnv(name:string,defaults:string[]=[]){const raw=process.env[name];if(!raw)return defaults;try{const parsed=JSON.parse(raw);if(!Array.isArray(parsed)||!parsed.every(x=>typeof x==="string"))throw new Error(name+"_must_be_json_array");return parsed as string[];}catch{throw new Error(name+"_invalid_json");}}
 function substitute(args:string[],values:Record<string,string>){return args.map(arg=>Object.entries(values).reduce((v,[key,value])=>v.split("{"+key+"}").join(value),arg));}
+const PNG_SIGNATURE=Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]);
+interface OpenAiImagesConfig{apiKey:string;model:string;quality:string;baseUrl:string;}
+/** Enabled only with LAYANX_CREATOR_IMAGE_PROVIDER=openai AND an OPENAI_API_KEY: each image is billed to that key. */
+function openAiImagesConfig():OpenAiImagesConfig|undefined{
+ if(process.env.LAYANX_CREATOR_IMAGE_PROVIDER?.trim().toLowerCase()!=="openai")return undefined;
+ const apiKey=process.env.OPENAI_API_KEY?.trim();if(!apiKey)throw new Error("creator_openai_images_requires_OPENAI_API_KEY");
+ const quality=(process.env.LAYANX_CREATOR_IMAGE_QUALITY??"low").trim().toLowerCase();
+ if(!["low","medium","high","auto"].includes(quality))throw new Error("creator_openai_images_invalid_quality");
+ return {apiKey,model:process.env.LAYANX_CREATOR_IMAGE_MODEL?.trim()||"gpt-image-1",quality,baseUrl:"https://api.openai.com/v1"};
+}
+function openAiImagesStatus(){
+ const selected=process.env.LAYANX_CREATOR_IMAGE_PROVIDER?.trim().toLowerCase()==="openai";const key=Boolean(process.env.OPENAI_API_KEY?.trim());
+ return {name:"openai-images",available:selected&&key,mode:"http" as const,reason:selected?(key?"configured (paid per image, model "+(process.env.LAYANX_CREATOR_IMAGE_MODEL?.trim()||"gpt-image-1")+")":"LAYANX_CREATOR_IMAGE_PROVIDER=openai but OPENAI_API_KEY is missing"):"optional cloud provider: set LAYANX_CREATOR_IMAGE_PROVIDER=openai and OPENAI_API_KEY (billed per image)"};
+}
 export class CreatorEngine{
  readonly root:string;
  constructor(private readonly options:CreatorEngineOptions={}){this.root=resolve(options.root??process.env.LAYANX_CREATOR_OUTPUT_DIR??".layanx/creator");mkdirSync(this.root,{recursive:true});}
@@ -37,27 +52,43 @@ export class CreatorEngine{
  async generateAssets(id:string){
   const project=this.load(id);const dir=join(this.root,safeName(project.id));const visualExe=process.env.LAYANX_CREATOR_VISUAL_EXECUTABLE;const ttsExe=process.env.LAYANX_TTS_EXECUTABLE;
   const comfyUrl=process.env.LAYANX_COMFYUI_URL?.replace(/\/$/,"");
-  if(!visualExe&&!comfyUrl)throw new Error("creator_visual_generator_not_configured");
+  const openai=!visualExe&&!comfyUrl?openAiImagesConfig():undefined;
+  if(!visualExe&&!comfyUrl&&!openai)throw new Error("creator_visual_generator_not_configured");
   const visualArgs=argsFromEnv("LAYANX_CREATOR_VISUAL_ARGS_JSON",["{prompt}","{output}"]);
   for(const scene of project.scenes){const output=join(dir,scene.id+".png");
    if(visualExe){await this.run(visualExe,substitute(visualArgs,{prompt:scene.visualPrompt,output,duration:String(scene.durationSec),aspect:project.aspectRatio}),180000);}
-   else {await this.generateWithComfyUI(scene.visualPrompt,output,project.aspectRatio);}
+   else if(comfyUrl){await this.generateWithComfyUI(scene.visualPrompt,output,project.aspectRatio);}
+   else {await this.generateWithOpenAI(openai!,scene.visualPrompt,output,project.aspectRatio);}
    if(!existsSync(output))throw new Error("creator_visual_output_missing:"+scene.id);scene.assetPath=output;}
   if(ttsExe){const ttsArgs=argsFromEnv("LAYANX_TTS_ARGS_JSON",["{text}","{output}"]);const audio=join(dir,"voice.wav");await this.run(ttsExe,substitute(ttsArgs,{text:project.script,output:audio,audio}),180000);if(existsSync(audio))writeFileSync(join(dir,"voice.ready"),"ready","utf8");}
   this.save(project);return project;
  }
  async render(id:string,outputPath?:string){
   const project=this.load(id);if(project.scenes.some(s=>!s.assetPath))throw new Error("creator_scene_assets_required");
-  const ffmpeg=process.env.LAYANX_FFMPEG_PATH??"ffmpeg";if(!(await commandExists(ffmpeg)))throw new Error("ffmpeg_not_available");
-  const out=resolve(outputPath??join(this.root,safeName(project.id),safeName(project.title)+".mp4"));const rootPrefix=this.root.endsWith("/")?this.root:this.root+"/";if(!out.startsWith(rootPrefix))throw new Error("creator_output_outside_workspace");
-  const width=project.aspectRatio==="16:9"?1920:1080;const height=project.aspectRatio==="16:9"?1080:1920;const args:string[]=[];project.scenes.forEach(scene=>{const asset=resolve(scene.assetPath!);if(!asset.startsWith(rootPrefix))throw new Error("creator_asset_outside_workspace");args.push("-loop","1","-t",String(scene.durationSec),"-i",asset);});
+  const out=resolve(outputPath??join(this.root,safeName(project.id),safeName(project.title)+".mp4"));// Separator-aware containment (Windows uses "\\"): the old "/" prefix check refused every render on Windows.
+  if(!isPathInside(this.root,out)||resolve(out)===this.root)throw new Error("creator_output_outside_workspace");
+  const width=project.aspectRatio==="16:9"?1920:1080;const height=project.aspectRatio==="16:9"?1080:1920;const args:string[]=[];project.scenes.forEach(scene=>{const asset=resolve(scene.assetPath!);if(!isPathInside(this.root,asset))throw new Error("creator_asset_outside_workspace");args.push("-loop","1","-t",String(scene.durationSec),"-i",asset);});
   const filters=project.scenes.map((_,i)=>"["+i+":v]scale="+width+":"+height+":force_original_aspect_ratio=decrease,pad="+width+":"+height+":(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v"+i+"]").join(";");const concat=project.scenes.map((_,i)=>"[v"+i+"]").join("")+"concat=n="+project.scenes.length+":v=1:a=0[v]";
+  // Paths are validated before probing for FFmpeg, so unsafe input is refused on every machine.
+  const ffmpeg=process.env.LAYANX_FFMPEG_PATH??"ffmpeg";if(!(await commandExists(ffmpeg)))throw new Error("ffmpeg_not_available");
   args.push("-filter_complex",filters+";"+concat,"-map","[v]");
   const audio=join(this.root,safeName(project.id),"voice.wav");if(existsSync(audio)){args.push("-i",audio,"-map","1:a:0","-shortest");}
   args.push("-c:v","libx264","-pix_fmt","yuv420p","-movflags","+faststart","-y",out);await this.run(ffmpeg,args,300000);project.outputPath=out;this.save(project);return project;
  }
- async doctor():Promise<CreatorDoctorReport>{const ffmpeg=await commandExists(process.env.LAYANX_FFMPEG_PATH??"ffmpeg");return{ready:ffmpeg,providers:[{name:"local-llm",available:Boolean(process.env.OLLAMA_HOST||this.options.generateText),mode:"local",reason:(process.env.OLLAMA_HOST||this.options.generateText)?"configured":"no local LLM callback configured"},{name:"tts-command",available:Boolean(process.env.LAYANX_TTS_EXECUTABLE),mode:"command",reason:process.env.LAYANX_TTS_EXECUTABLE?"configured":"optional; set executable and LAYANX_TTS_ARGS_JSON"},{name:"visual-command",available:Boolean(process.env.LAYANX_CREATOR_VISUAL_EXECUTABLE),mode:"command",reason:process.env.LAYANX_CREATOR_VISUAL_EXECUTABLE?"configured":"set a local image generator executable and args JSON"},{name:"comfyui",available:Boolean(process.env.LAYANX_COMFYUI_URL),mode:"http",reason:process.env.LAYANX_COMFYUI_URL?"configured":"optional future HTTP provider"}],ffmpeg,outputDir:this.root};}
+ async doctor():Promise<CreatorDoctorReport>{const ffmpeg=await commandExists(process.env.LAYANX_FFMPEG_PATH??"ffmpeg");return{ready:ffmpeg,providers:[{name:"local-llm",available:Boolean(process.env.OLLAMA_HOST||this.options.generateText),mode:"local",reason:(process.env.OLLAMA_HOST||this.options.generateText)?"configured":"no local LLM callback configured"},{name:"tts-command",available:Boolean(process.env.LAYANX_TTS_EXECUTABLE),mode:"command",reason:process.env.LAYANX_TTS_EXECUTABLE?"configured":"optional; set executable and LAYANX_TTS_ARGS_JSON"},{name:"visual-command",available:Boolean(process.env.LAYANX_CREATOR_VISUAL_EXECUTABLE),mode:"command",reason:process.env.LAYANX_CREATOR_VISUAL_EXECUTABLE?"configured":"set a local image generator executable and args JSON"},{name:"comfyui",available:Boolean(process.env.LAYANX_COMFYUI_URL),mode:"http",reason:process.env.LAYANX_COMFYUI_URL?"configured":"optional local HTTP provider (LAYANX_COMFYUI_URL + LAYANX_COMFYUI_WORKFLOW_JSON)"},openAiImagesStatus()],ffmpeg,outputDir:this.root};}
  private async generateWithComfyUI(prompt:string,output:string,aspect:"16:9"|"9:16"|"1:1"){const base=process.env.LAYANX_COMFYUI_URL?.replace(/\/$/,"");if(!base)throw new Error("creator_comfyui_not_configured");const raw=process.env.LAYANX_COMFYUI_WORKFLOW_JSON;if(!raw)throw new Error("LAYANX_COMFYUI_WORKFLOW_JSON is required for ComfyUI");let workflow:any;try{workflow=JSON.parse(raw);}catch{throw new Error("LAYANX_COMFYUI_WORKFLOW_JSON_invalid");}const replace=(v:any):any=>typeof v==="string"?v.replaceAll("{prompt}",prompt).replaceAll("{output}",output).replaceAll("{aspect}",aspect):Array.isArray(v)?v.map(replace):v&&typeof v==="object"?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,replace(x)])):v;workflow=replace(workflow);const queued=await this.httpJson(base+"/prompt",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({prompt:workflow,client_id:"layanx-creator"})});const promptId=String(queued?.prompt_id??"");if(!promptId)throw new Error("creator_comfyui_prompt_id_missing");const deadline=Date.now()+180000;let history:any;while(Date.now()<deadline){await new Promise(r=>setTimeout(r,1500));try{history=await this.httpJson(base+"/history/"+encodeURIComponent(promptId),{method:"GET"});}catch{continue;}const entry=history?.[promptId];if(!entry)continue;if(entry.status?.status_str==="error"||entry.status?.status_str==="failed")throw new Error("creator_comfyui_generation_failed");const files:any[]=[];for(const node of Object.values(entry.outputs??{}) as any[]){for(const image of node.images??[])if(image?.filename)files.push(image);}if(files.length){const chosen=files[0];const qs=new URLSearchParams({filename:String(chosen.filename),subfolder:String(chosen.subfolder??""),type:String(chosen.type??"output")});const response=await fetch(base+"/view?"+qs);if(!response.ok)throw new Error("creator_comfyui_output_fetch_failed");writeFileSync(output,Buffer.from(await response.arrayBuffer()));return;}}throw new Error("creator_comfyui_generation_timeout");}
+ /** Cloud images (paid, opt-in): one POST per scene; the PNG is decoded, signature-checked and written inside the project folder. */
+ private async generateWithOpenAI(config:OpenAiImagesConfig,prompt:string,output:string,aspect:"16:9"|"9:16"|"1:1"){
+  const size=aspect==="16:9"?"1536x1024":aspect==="9:16"?"1024x1536":"1024x1024";
+  const fetcher=this.options.fetcher??fetch;
+  const response=await fetcher(config.baseUrl+"/images/generations",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+config.apiKey},body:JSON.stringify({model:config.model,prompt:prompt.slice(0,4000),size,n:1,quality:config.quality,output_format:"png"}),signal:AbortSignal.timeout(180000)});
+  const text=await response.text();let data:{data?:Array<{b64_json?:string}>;error?:{message?:string;code?:string}}={};try{data=text?JSON.parse(text):{};}catch{data={};}
+  if(!response.ok){const reason=(data.error?.code||data.error?.message||"").slice(0,200).replaceAll(config.apiKey,"[redacted]");throw new Error("creator_openai_images_http_"+response.status+(reason?":"+reason:""));}
+  const b64=data.data?.[0]?.b64_json;if(!b64)throw new Error("creator_openai_images_empty_response");
+  const bytes=Buffer.from(b64,"base64");
+  if(bytes.length<64||!bytes.subarray(0,8).equals(PNG_SIGNATURE))throw new Error("creator_openai_images_not_png");
+  writeFileSync(output,bytes);
+ }
  private async httpJson(url:string,init:RequestInit){const r=await fetch(url,init);const t=await r.text();let d:any={};try{d=t?JSON.parse(t):{};}catch{d={raw:t};}if(!r.ok)throw new Error("creator_comfyui_http_"+r.status);return d;}
  private run(command:string,args:string[],timeoutMs:number){return new Promise<void>((resolveResult,reject)=>{const child=spawn(command,args,{stdio:["ignore","pipe","pipe"]});let stderr="";const timer=setTimeout(()=>{child.kill("SIGKILL");reject(new Error("creator_command_timeout"));},timeoutMs);child.stderr.on("data",d=>{stderr+=String(d).slice(-4000);});child.on("error",e=>{clearTimeout(timer);reject(e);});child.on("close",code=>{clearTimeout(timer);if(code===0)resolveResult();else reject(new Error("creator_command_failed:"+code+":"+stderr.slice(-1200)));});});}
 }

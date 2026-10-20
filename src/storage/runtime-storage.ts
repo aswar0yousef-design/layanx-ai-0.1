@@ -18,6 +18,8 @@ class MemoryStorage implements StorageAdapter{
 export class RuntimeStorage{
  private writeQueue:Promise<void>=Promise.resolve();
  constructor(private readonly storage:StorageAdapter=new MemoryStorage(),private readonly keys:RuntimeStorageKeys={snapshot:"runtime:snapshots"}){}
+ /** Key that holds the runtime snapshots; RuntimePersistence uses it for every read and write. */
+ get snapshotKey():string{return this.keys.snapshot;}
  async transaction<T>(work:(tx:Transaction)=>Promise<T>):Promise<T>{await this.writeQueue;return this.storage.transaction(work);}
  async get<T>(key=this.keys.snapshot):Promise<T|undefined>{await this.writeQueue;return this.storage.transaction(async tx=>tx.get<T>(key));}
  async set<T>(value:T,key=this.keys.snapshot):Promise<void>{this.writeQueue=this.writeQueue.then(()=>this.storage.transaction(async tx=>{await tx.set(key,value);}));await this.writeQueue;}

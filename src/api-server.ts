@@ -808,6 +808,16 @@ export function startRuntimeApi(options:RuntimeApiOptions){
    }
    return;
   }
+  if(request.method==="GET"&&request.url==="/v1/skills/installed"){
+   if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
+   // Read-only: approve/enable stay on this computer (`npm run skills -- approve|enable <id>`), like other permission changes.
+   const installer=options.core.skillInstaller;
+   const installed=installer.list().map(record=>{let verified=false;try{verified=installer.verifyStored(record.manifest.id);}catch{verified=false;}
+    const current=options.core.skills.list().find(skill=>skill.id===record.manifest.id);
+    return {id:record.manifest.id,name:record.manifest.name,version:record.manifest.version,previousVersion:record.previousVersion,description:record.manifest.description,source:record.manifest.source,license:record.manifest.license,permissions:record.manifest.permissions,tools:record.manifest.tools,networkHosts:record.manifest.networkHosts,status:current?.status??record.manifest.status,verified,findings:record.findings,installedAt:record.installedAt,updatedAt:record.updatedAt};});
+   json(response,200,{ok:true,installed});
+   return;
+  }
   if(request.method==="GET"&&request.url==="/v1/skills"){
    if(!authorized(request,options.token)){json(response,401,{ok:false,error:"unauthorized"});return;}
    json(response,200,{ok:true,skills:options.core.skills.list()});
