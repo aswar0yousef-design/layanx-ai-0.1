@@ -2,6 +2,7 @@ import {createHash} from "node:crypto";
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from "node:fs";
 import {dirname} from "node:path";
 import type {MediaAsset,MediaKind} from "./types.js";
+import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
 
 export interface MediaInspection{url:string;kind:MediaKind;mimeType?:string;contentLength?:number;reachable:boolean;inspectedAt:string;}
 const now=()=>new Date().toISOString();
@@ -17,21 +18,32 @@ function inferKind(mime?:string,url=""):MediaKind{
  if(["mp3","wav","m4a","ogg"].includes(ext??""))return "audio";
  return "document";
 }
-async function head(url:string){
- const r=await fetch(url,{method:"HEAD",redirect:"follow"});
- return {ok:r.ok,status:r.status,mime:r.headers.get("content-type")??undefined,length:Number(r.headers.get("content-length")??"")||undefined};
+/**
+ * HEAD request that cannot be steered at this machine or the LAN: every hop (including redirects, max 3)
+ * passes the shared network guard. `media.inspect` is an L1 agent tool, so its URL is untrusted input.
+ */
+async function head(url:string,fetcher:typeof fetch=fetch,resolver:HostResolver|undefined=defaultHostResolver){
+ let current=new URL(url);
+ for(let hop=0;hop<=3;hop++){
+  await assertPublicHttpUrl(current,resolver);
+  const r=await fetcher(current.toString(),{method:"HEAD",redirect:"manual",signal:AbortSignal.timeout(10000)});
+  const location=r.status>=300&&r.status<400?r.headers.get("location"):null;
+  if(location){current=new URL(location,current);continue;}
+  return {ok:r.ok,status:r.status,mime:r.headers.get("content-type")??undefined,length:Number(r.headers.get("content-length")??"")||undefined};
+ }
+ throw new Error("media_too_many_redirects");
 }
 export class MediaManager{
  private readonly path=process.env.LAYANX_MEDIA_STORAGE_PATH??".layanx/media.json";
  private items:MediaInspection[]=[];
- constructor(){this.load();}
+ constructor(private readonly options:{fetcher?:typeof fetch;resolveHost?:HostResolver}={}){this.load();}
  private load(){try{if(existsSync(this.path))this.items=JSON.parse(readFileSync(this.path,"utf8")) as MediaInspection[];}catch{this.items=[];}}
  private persist(){mkdirSync(dirname(this.path),{recursive:true});const tmp=this.path+".tmp";writeFileSync(tmp,JSON.stringify(this.items,null,2),"utf8");renameSync(tmp,this.path);}
  async inspect(url:string):Promise<MediaInspection>{
   if(!/^https?:\/\//i.test(url))throw new Error("media_url_must_be_http");
   const existing=this.items.find(x=>x.url===url);
   try{
-   const r=await head(url);
+   const r=await head(url,this.options.fetcher??globalThis.fetch,this.options.resolveHost??defaultHostResolver);
    if(!r.ok)throw new Error(`media_http_${r.status}`);
    const result:MediaInspection={url,kind:inferKind(r.mime,url),mimeType:r.mime,contentLength:r.length,reachable:true,inspectedAt:now()};
    const previous=this.items.findIndex(x=>x.url===url);if(previous>=0)this.items[previous]=result;else this.items.push(result);this.persist();return result;

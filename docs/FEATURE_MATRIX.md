@@ -6,7 +6,7 @@
 
 | الميزة | الحالة | الملفات الأساسية | الدليل (اختبارات) | المتطلبات / المخاطر | التحقق اليدوي |
 |---|---|---|---|---|---|
-| Agent Gateway ودورة المهمة | Partial | `src/core/orchestrator.ts` (`runAgentGateway`), `lifecycle.ts`, `mission-runner.ts`, `mission-store.ts` | `agent-gateway-approval.spec`, `e2e-goal-to-memory.spec` | الحالات `queued`/`waiting_approval` غير موجودة كأسماء | `npm run local` ثم مهمة من صفحة Agent |
+| Agent Gateway ودورة المهمة | Partial | `src/core/orchestrator.ts` (`runAgentGateway`), `lifecycle.ts`, `mission-runner.ts`, `mission-store.ts` | `agent-gateway-approval.spec`, `e2e-goal-to-memory.spec` | المهام المستقلة (`autonomy/supervisor.ts`) تستخدم `queued`/`waiting_approval`؛ المهمة الداخلية تستخدم `blocked` للموافقة | `npm run local` ثم مهمة من صفحة Agent |
 | الصلاحيات L1–L5 والموافقات | Verified | `src/security/*` (`approval.ts`) | `approval-restart-recovery.spec`, `red-team.spec` | — | صفحة Approvals |
 | عزل المشاريع | Verified | `security/project-isolation.ts`, `memory/*` | `project-memory-isolation.spec`, `memory-scoped-recall.spec` | — | — |
 | التخزين JSON/SQLite | Verified | `src/storage/*` | `runtime-storage.spec`, `scheduler-persistence.spec` | — | — |
@@ -40,5 +40,5 @@
 | الشحن واللوجستيات | None | — | — | — | — |
 | التداول (تحليل/Backtest/Paper) | Verified | `src/trading/*` | `trading-evaluation.spec`, `historical-backtest.spec` وغيرها | — | صفحة Trading |
 | التداول الحقيقي Binance/MT5 | API (مغلق افتراضيًا) | `trading/agent-integration.ts` | `trading-agent-integration.spec`, `trading-runtime-approval.spec`, `mt5-live-execution.spec` | `BINANCE_LIVE_TRADING_ENABLED=true` + L4 + حد قيمة | — |
-| Control Center | Partial | `web/*`, `src/control-center.ts` | `control-center.spec`, `control-center-ui.spec`, CI `windows` smoke | داكن فقط؛ صفحات مفقودة (انظر AUDIT) | `npm run local` |
+| Control Center | Partial | `web/*`, `src/control-center.ts` | `control-center.spec`, `control-center-ui.spec`, CI `windows` smoke؛ صفحتا التشخيص والجدولة فُحصتا بمتصفح حقيقي (Playwright) | داكن فقط؛ صفحات مفقودة: الذاكرة، المهارات، مركز الأمن، الوسائط، البريد، الشحن؛ نصوص الفحوص بالإنجليزية | `LayanX.cmd` ثم صفحة التشخيص |
 | تشغيل Windows (`LayanX.cmd`) | Partial | `LayanX.cmd`, `scripts/windows/*` | `bootstrap.spec`, CI windows | لا MSIX/WiX، لا إلغاء تثبيت | انقر `LayanX.cmd` |

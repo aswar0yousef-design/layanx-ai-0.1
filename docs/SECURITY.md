@@ -24,3 +24,7 @@ Residual risk: a race between the real-path check and the write (TOCTOU) is poss
 `browser.read` and `http.read` go through `src/security/network-guard.ts`: only http/https, no credentials in URLs, no single-label / `.local` / `.internal` names, and every IP literal or DNS answer must be public. Blocked: loopback, `0.0.0.0/8`, RFC1918, CGNAT `100.64/10`, link-local and cloud metadata `169.254.169.254`, multicast/reserved, IPv6 loopback/ULA/link-local, IPv4-mapped/NAT64/6to4 forms. Redirects stay disabled.
 
 Residual risk: DNS rebinding. The name is resolved for the check and again by the HTTP client. Closing this fully requires pinning the connection to the checked address (custom agent); tracked in `docs/ROADMAP.md`.
+
+
+### media.inspect (2026-10-20)
+أداة الوكيل `media.inspect` (L1) والمسار `POST /v1/business/media/inspect` يمرّان عبر `src/security/network-guard.ts` نفسه: فحص العنوان وإجابات DNS، وإعادة الفحص عند كل تحويل (حتى 3)، ومهلة 10 ثوانٍ. المخاطرة المتبقية: DNS rebinding بين الفحص والطلب (R1).
