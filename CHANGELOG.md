@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Scheduler save tracking
+
+### Fixed
+- `MissionScheduler` background saves are tracked: `flush()` waits for them, and a failed save is logged and exposed as `persistenceError` instead of becoming an unhandled promise rejection that would stop the process. The next save rewrites the full state.
+- `scheduler-calendar-retry.spec.ts` no longer guesses with fixed sleeps (failed once on Windows CI with ENOENT when the temp folder was removed during a save).
+
 ## Unreleased — Skills in the Control Center
 
 ### Added
