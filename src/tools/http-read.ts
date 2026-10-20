@@ -1,5 +1,6 @@
 import type {ToolAdapter} from "./executor.js";
 import type {ToolRequest} from "../core/types.js";
+import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
 
 const MAX_URL_LENGTH=2048;
 const MAX_RESPONSE_BYTES=64*1024;
@@ -19,14 +20,16 @@ function validateUrl(value:unknown):URL{
  if(/^172\.(1[6-9]|2\d|3[0-1])\./.test(host))throw new Error("Private HTTP targets are blocked.");
  return url;
 }
-export function createHttpReadAdapter(options:{fetcher?:typeof fetch;timeoutMs?:number;maxResponseBytes?:number}={}):ToolAdapter{
+export function createHttpReadAdapter(options:{fetcher?:typeof fetch;timeoutMs?:number;maxResponseBytes?:number;resolveHost?:HostResolver}={}):ToolAdapter{
  const fetcher=options.fetcher??fetch;
+ const resolver=options.resolveHost??(options.fetcher?undefined:defaultHostResolver);
  const timeoutMs=options.timeoutMs??DEFAULT_TIMEOUT_MS;
  const maxBytes=options.maxResponseBytes??MAX_RESPONSE_BYTES;
  return {
   async execute(request){
    const input=payload(request);
    const url=validateUrl(input.url);
+   await assertPublicHttpUrl(url,resolver);
    const controller=new AbortController();
    const timer=setTimeout(()=>controller.abort(),timeoutMs);
    try{
