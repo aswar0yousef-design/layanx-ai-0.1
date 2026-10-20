@@ -65,11 +65,12 @@ export class CreatorEngine{
  }
  async render(id:string,outputPath?:string){
   const project=this.load(id);if(project.scenes.some(s=>!s.assetPath))throw new Error("creator_scene_assets_required");
-  const ffmpeg=process.env.LAYANX_FFMPEG_PATH??"ffmpeg";if(!(await commandExists(ffmpeg)))throw new Error("ffmpeg_not_available");
   const out=resolve(outputPath??join(this.root,safeName(project.id),safeName(project.title)+".mp4"));// Separator-aware containment (Windows uses "\\"): the old "/" prefix check refused every render on Windows.
   if(!isPathInside(this.root,out)||resolve(out)===this.root)throw new Error("creator_output_outside_workspace");
   const width=project.aspectRatio==="16:9"?1920:1080;const height=project.aspectRatio==="16:9"?1080:1920;const args:string[]=[];project.scenes.forEach(scene=>{const asset=resolve(scene.assetPath!);if(!isPathInside(this.root,asset))throw new Error("creator_asset_outside_workspace");args.push("-loop","1","-t",String(scene.durationSec),"-i",asset);});
   const filters=project.scenes.map((_,i)=>"["+i+":v]scale="+width+":"+height+":force_original_aspect_ratio=decrease,pad="+width+":"+height+":(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v"+i+"]").join(";");const concat=project.scenes.map((_,i)=>"[v"+i+"]").join("")+"concat=n="+project.scenes.length+":v=1:a=0[v]";
+  // Paths are validated before probing for FFmpeg, so unsafe input is refused on every machine.
+  const ffmpeg=process.env.LAYANX_FFMPEG_PATH??"ffmpeg";if(!(await commandExists(ffmpeg)))throw new Error("ffmpeg_not_available");
   args.push("-filter_complex",filters+";"+concat,"-map","[v]");
   const audio=join(this.root,safeName(project.id),"voice.wav");if(existsSync(audio)){args.push("-i",audio,"-map","1:a:0","-shortest");}
   args.push("-c:v","libx264","-pix_fmt","yuv420p","-movflags","+faststart","-y",out);await this.run(ffmpeg,args,300000);project.outputPath=out;this.save(project);return project;
