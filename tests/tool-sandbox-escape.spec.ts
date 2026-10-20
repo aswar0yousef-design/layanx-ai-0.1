@@ -1,3 +1,4 @@
+import {assertSafeWorkspacePath} from "../src/platform/path-guard.js";
 import {createFileToolAdapter,createFileWriteToolAdapter,createBrowserToolAdapter} from "../src/tools/fabric.js";
 import {createHttpReadAdapter} from "../src/tools/http-read.js";
 import {isBlockedAddress,assertPublicHttpUrl} from "../src/security/network-guard.js";
@@ -76,3 +77,10 @@ for(const url of ["http://169.254.169.254/latest/meta-data","http://10.0.0.5/","
 }
 if(calls!==0)throw new Error("A blocked request reached the network transport.");
 console.log("Tool sandbox escape and SSRF guard tests passed.");
+
+// Windows path traps are rejected through the shared path guard (validated with win32 rules on every OS).
+for(const bad of ["notes.txt:hidden","CON","nul.txt","\\\\?\\C:\\Windows\\win.ini","secret.env.","D:foo"]){
+ let blocked=false;try{assertSafeWorkspacePath("C:\\work\\p1",bad,"win32");}catch{blocked=true;}
+ if(!blocked)throw new Error("Windows path trap accepted: "+bad);
+}
+console.log("Windows path trap checks passed.");

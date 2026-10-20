@@ -7,6 +7,7 @@ import type {ToolRequest} from "../core/types.js";
 import type {ToolAdapter} from "./executor.js";
 import {ensureGitOnPath} from "./git.js";
 import {ProjectIsolation} from "../security/project-isolation.js";
+import {assertSafeWorkspacePath,isPathInside} from "../platform/path-guard.js";
 import {assertPublicHttpUrl,defaultHostResolver,type HostResolver} from "../security/network-guard.js";
 import {isolationLevel,restrictedAvailable} from "../autonomy/sandbox.js";
 import {createProjectRunnerAdapter,npmCommand,runOnce} from "../autonomy/project-runner.js";
@@ -34,10 +35,12 @@ function sandboxPath(root:string,input:string):string{
  if(!input||isAbsolute(input))throw new Error("Workspace paths must be relative.");
  const base=resolve(root),target=resolve(base,input),rel=relative(base,target);
  // isAbsolute(rel): on Windows a drive-relative input such as "D:foo" resolves onto another drive.
- if(rel===""||(!isAbsolute(rel)&&!rel.startsWith(".."+sep)&&rel!==".."))return target;
- throw new Error("Workspace path escapes the project sandbox.");
+ if(!(rel===""||(!isAbsolute(rel)&&!rel.startsWith(".."+sep)&&rel!=="..")))throw new Error("Workspace path escapes the project sandbox.");
+ // Shared Windows hardening: NTFS alternate data streams, CON/NUL/COM1 device names, \\?\ prefixes, trailing dot/space.
+ assertSafeWorkspacePath(base,input);
+ return target;
 }
-function isInside(base:string,target:string):boolean{const rel=relative(base,target);return rel===""||(!isAbsolute(rel)&&!rel.startsWith(".."+sep)&&rel!=="..");}
+const isInside=(base:string,target:string)=>isPathInside(base,target);
 /** Nearest existing ancestor (or the path itself), resolved through every symbolic link / junction. */
 async function realExistingAncestor(target:string):Promise<string>{
  let current=target;
