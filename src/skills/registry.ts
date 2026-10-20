@@ -10,4 +10,12 @@ export class SkillRegistry{
  disable(id:string){const s=this.get(id);this.skills.set(id,{...s,status:"disabled"});}
  get(id:string){const s=this.skills.get(id);if(!s)throw new Error("Unknown skill: "+id);return s;}
  list(){return[...this.skills.values()];}
+ has(id:string){return this.skills.has(id);}
+ /** Removes a skill (uninstall or before re-registering an updated version). */
+ remove(id:string){if(!this.skills.delete(id))throw new Error("Unknown skill: "+id);}
+ /**
+  * Restores a skill whose integrity was re-verified from durable storage. Only the installer calls this;
+  * it keeps a previously reviewed approved/enabled status instead of forcing a new quarantine.
+  */
+ restoreVerified(skill:SkillManifest){if(this.skills.has(skill.id))throw new Error("Skill already registered.");this.skills.set(skill.id,{...skill});}
 }

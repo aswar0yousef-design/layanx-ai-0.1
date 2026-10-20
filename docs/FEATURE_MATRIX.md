@@ -24,7 +24,7 @@
 | Coding Mission / Safe Code Modifier | Partial | `core/safe-code-modifier.ts`, `core/code-review-agent.ts` | `safe-code-modifier.spec` | — | — |
 | الإصلاح الذاتي | Partial | `autonomy/supervisor.ts`, `autonomy/*` | `autonomous-repair.spec` | حدود محاولات موجودة | — |
 | Verification Engine | Partial | `core/verification.ts` | `verification-hardening.spec`, `verification-integration-hardening.spec` | — | — |
-| Skills Runtime | Partial | `src/skills/*` | `skills-runtime.spec`, `skill-learning.spec` | سجل في الذاكرة فقط؛ checksum يُفحص وجوده لا مطابقته؛ لا تثبيت/إصدارات | — |
+| Skills Runtime | Verified (تثبيت محلي) | `src/skills/*` (`installer.ts`, `scanner.ts`, `registry.ts`) | `skills-runtime.spec`, `skill-learning.spec`, `skill-installer.spec` | تثبيت من مجلد محلي فقط؛ فحص نصي بالأنماط؛ لا واجهة رسومية | `npm run skills -- inspect <folder>` |
 | MCP Gateway | Partial | `src/mcp/*` | `mcp-client.spec`, `mcp-gateway.spec` | خوادم المستخدم مسؤوليته | صفحة Integrations |
 | الذاكرة النصية | Verified | `src/memory/*` | `memory*.spec`, `memory-arabic-hybrid.spec` | — | — |
 | الذاكرة الدلالية | HW | `memory/embedder.ts`, `vector-store.ts` | `semantic-memory.spec` | نموذج تضمين (`nomic-embed-text`) | — |

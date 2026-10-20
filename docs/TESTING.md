@@ -15,7 +15,16 @@
 | `npm run e2e:ollama` | مسار هدف → مهمة → نتيجة مع Ollama حقيقي | Ollama + نموذج |
 | `npm run production:preflight` / `production:acceptance` | بوابات الجاهزية للإنتاج | إعدادات الإنتاج |
 
-لا توجد حاليًا سكربتات `test:integration` و`test:e2e` منفصلة؛ المجموعة واحدة. التقسيم مدرج في `ROADMAP.md` ولن يُضاف اسم سكربت قبل أن يشغّل مجموعة فعلية.
+### مجموعات فرعية (من `tests/suites.json`)
+
+| الأمر | الملفات (2026-10-20) |
+|---|---|
+| `npm run test:integration` | 34 (API محلي حقيقي، تخزين، Postgres fallback، MCP، إعادة تشغيل) |
+| `npm run test:e2e` | 2 (`e2e-goal-to-memory`، القبول) — تغطية e2e ما زالت قليلة |
+| `npm run test:security` | 17 |
+| `npm run test:recovery` | 24 |
+
+المجموعة التي لا تطابق أي ملف تفشل بدل أن تنجح فارغة. `npm test` يشغّل كل الملفات دائمًا (وهو ما يشغّله CI).
 
 ## طبقات التغطية الحالية (أسماء ملفات حقيقية)
 

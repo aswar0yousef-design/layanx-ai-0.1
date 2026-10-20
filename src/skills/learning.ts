@@ -2,7 +2,7 @@ import {createHash,randomUUID} from "node:crypto";
 import {mkdirSync,readFileSync,writeFileSync,readdirSync} from "node:fs";
 import {join,resolve} from "node:path";
 import type {SkillManifest} from "./registry.js";
-import {SkillScanner} from "./scanner.js";
+import {SkillScanner,scanSkillContent} from "./scanner.js";
 
 export interface LearningTrace{missionId:string;projectId:string;goal:string;steps:Array<{tool:string;action:string;ok:boolean;error?:string}>;outcome:"success"|"failure";lesson?:string;}
 export interface PendingSkill{ id:string; manifest:SkillManifest; content:string; createdAt:string; sourceMissionId:string; findings:ReturnType<SkillScanner["scan"]>; }
@@ -33,7 +33,7 @@ export class SkillLearningEngine{
  list():PendingSkill[]{try{return readdirSync(this.dir()).filter(x=>x.endsWith(".json")).map(x=>JSON.parse(readFileSync(join(this.dir(),x),"utf8")) as PendingSkill)}catch{return[]}}
  get(id:string){const p=this.path(id);try{return JSON.parse(readFileSync(p,"utf8")) as PendingSkill}catch{throw new Error("Unknown pending skill: "+id)}}
  approve(id:string){const item=this.get(id);if(!item.findings.safe)throw new Error("Skill cannot be approved while security findings block it.");const checksum=createHash("sha256").update(item.content).digest("hex");if(checksum!==item.manifest.checksum)throw new Error("Pending skill integrity checksum mismatch.");item.manifest.status="approved";writeFileSync(this.path(id),JSON.stringify(item,null,2)+"\n","utf8");return item}
- verify(id:string){const item=this.get(id);const checksum=createHash("sha256").update(item.content).digest("hex");if(checksum!==item.manifest.checksum)return false;const scan=this.scanner.scan(item.manifest);const lower=item.content.toLowerCase();const blocked=[/ignore (all|previous|prior) instructions/,/send .*token|send .*password|exfiltrat/,/rm -rf|format c:/,/reverse shell|nc -e|curl .*\|.*sh/];return scan.safe&&!blocked.some(pattern=>pattern.test(lower));}
+ verify(id:string){const item=this.get(id);const checksum=createHash("sha256").update(item.content).digest("hex");if(checksum!==item.manifest.checksum)return false;const scan=this.scanner.scan(item.manifest);return scan.safe&&scanSkillContent(item.content).length===0;}
  enable(id:string){const item=this.get(id);if(item.manifest.status!=="approved")throw new Error("Skill must be approved before enablement.");item.manifest.status="enabled";writeFileSync(this.path(id),JSON.stringify(item,null,2)+"\n","utf8");return item}
  reject(id:string){const item=this.get(id);writeFileSync(this.path(id),JSON.stringify({...item,rejectedAt:new Date().toISOString()},null,2)+"\n","utf8");return item}
 }

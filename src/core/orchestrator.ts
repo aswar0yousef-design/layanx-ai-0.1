@@ -41,6 +41,9 @@ import {ProjectIsolation} from "../security/project-isolation.js";
 import {emptyProjectReason} from "../autonomy/project-runner.js";
 import {ContextFabric} from "./context-fabric.js";
 import {SkillRegistry} from "../skills/registry.js";
+import {SkillInstaller} from "../skills/installer.js";
+import {defaultDataDir} from "../platform/paths.js";
+import {join as joinPath} from "node:path";
 import {SkillRuntime} from "../skills/runtime.js";
 import {AgentTeamRuntime} from "./team-runtime.js";
 import {ProjectIntelligence} from "./project-intelligence.js";
@@ -146,6 +149,8 @@ export class LayanXCore{
   readonly strategies=new StrategyRegistry();
   readonly scalpRisk=new ScalpRiskController();
   readonly skills=new SkillRegistry();
+  /** Installed skill packages; persisted under LAYANX_SKILLS_DIR (default <data dir>/skills). Hydrated by restoreRuntime(). */
+  readonly skillInstaller=new SkillInstaller(this.skills,{root:process.env.LAYANX_SKILLS_DIR?.trim()||joinPath(defaultDataDir(),"skills")});
   readonly skillRuntime:SkillRuntime;
   readonly skillLearning=new SkillLearningEngine();
   private liveScreen?:LiveScreenObserver;

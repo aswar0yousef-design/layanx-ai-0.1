@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,13 +58,25 @@ function runTest(file) {
   });
 }
 
-const files = (await discover(testsRoot)).sort((a, b) => a.localeCompare(b));
+const suiteArg = process.argv.indexOf("--suite");
+const suite = suiteArg > 0 ? process.argv[suiteArg + 1] : undefined;
+let files = (await discover(testsRoot)).sort((a, b) => a.localeCompare(b));
+if (suite) {
+  const suites = JSON.parse(await readFile(join(testsRoot, "suites.json"), "utf8"));
+  const patterns = suites[suite];
+  if (!Array.isArray(patterns) || !patterns.length) {
+    console.error(`Unknown test suite "${suite}". Known: ${Object.keys(suites).filter(k => !k.startsWith("$")).join(", ")}`);
+    process.exit(1);
+  }
+  const regexes = patterns.map(pattern => new RegExp(pattern, "i"));
+  files = files.filter(file => regexes.some(regex => regex.test(relative(testsRoot, file))));
+}
 if (!files.length) {
-  console.error("No test files were discovered under tests/.");
+  console.error(suite ? `Test suite "${suite}" matched no test files.` : "No test files were discovered under tests/.");
   process.exit(1);
 }
 
-console.log(`LayanX test suite: discovered ${files.length} test files.`);
+console.log(`LayanX test suite${suite ? ` [${suite}]` : ""}: discovered ${files.length} test files.`);
 const failed = [];
 let passed = 0;
 const started = Date.now();

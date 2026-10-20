@@ -126,6 +126,7 @@ export function createRuntime(options:RuntimeOptions={}){
 export async function restoreRuntime(runtime:ReturnType<typeof createRuntime>):Promise<{restored:number}>{
  await runtime.business.hydrate();
  await runtime.core.scheduler.hydrate();
+ try{runtime.core.skillInstaller.hydrate();}catch(error){console.warn("Installed skills could not be loaded:",error instanceof Error?error.message:error);}
  if(process.env.LAYANX_QURAN_AUTOSCHEDULE==="true"&&capabilityEnabled("quran"))configureQuranDailySchedules(runtime.core);
  if(!runtime.persistence)return{restored:0};
  const snapshots=await runtime.persistence.list();
