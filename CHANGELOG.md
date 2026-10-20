@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Creator images (OpenAI)
+
+### Added
+- `creator.generate_assets` can use OpenAI Images when `LAYANX_CREATOR_IMAGE_PROVIDER=openai` and `OPENAI_API_KEY` are set (opt-in, billed per image; local command and ComfyUI keep priority). Size follows the project aspect (1024x1536 / 1536x1024 / 1024x1024), default model `gpt-image-1`, quality `low`. Output must be a real PNG; API errors never echo the key. `creator.doctor` lists `openai-images`.
+- Test `creator-openai-images.spec.ts`: no call unless selected, missing key, 401 without key leak, non-PNG refused, request shape, PNG files, and a real FFmpeg render to MP4.
+
 ## Unreleased — DNS pinning (R1)
 
 ### Security

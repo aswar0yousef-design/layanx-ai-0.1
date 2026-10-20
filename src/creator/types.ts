@@ -6,4 +6,4 @@ export interface CreatorProject{ id:string; title:string; topic:string; platform
 export interface CreatorPlanInput{ topic:string; title?:string; platform?:CreatorPlatform; language?:string; durationSec?:number; style?:string; }
 export interface CreatorProviderStatus{ name:string; available:boolean; mode:"local"|"http"|"command"|"builtin"; reason:string; }
 export interface CreatorDoctorReport{ ready:boolean; providers:CreatorProviderStatus[]; ffmpeg:boolean; outputDir:string; }
-export interface CreatorEngineOptions{ root?:string; generateText?: (prompt:string)=>Promise<string>; /** Rewrites the script so it sounds like a person (content.humanize). */ writer?:GenerateText; }
+export interface CreatorEngineOptions{ root?:string; generateText?: (prompt:string)=>Promise<string>; /** Rewrites the script so it sounds like a person (content.humanize). */ writer?:GenerateText; /** Transport for cloud image providers (tests inject one). */ fetcher?:typeof fetch; }
