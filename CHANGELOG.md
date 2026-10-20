@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Skills in the Control Center
+
+### Added
+- `GET /v1/skills/installed` (token-protected, read-only): installed packages with version, previous version, permissions, network hosts, source, scan findings, review status and a live checksum check.
+- Tools page: skill status pills are coloured by state, and a full-width "Installed skill packages" card shows intact / changed-after-install and the local commands to approve or enable (permission changes stay on this computer). Verified in Chromium, including a tampered package that is rejected after restart.
+
 ## Unreleased — PostgreSQL verified, dependency audit
 
 ### Added
