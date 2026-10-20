@@ -10,7 +10,7 @@
 | الصلاحيات L1–L5 والموافقات | Verified | `src/security/*` (`approval.ts`) | `approval-restart-recovery.spec`, `red-team.spec` | — | صفحة Approvals |
 | عزل المشاريع | Verified | `security/project-isolation.ts`, `memory/*` | `project-memory-isolation.spec`, `memory-scoped-recall.spec` | — | — |
 | التخزين JSON/SQLite | Verified | `src/storage/*` | `runtime-storage.spec`, `scheduler-persistence.spec` | — | — |
-| PostgreSQL | Partial | `storage/postgres-adapter.ts` | `business-postgres-fallback.spec` (بدون قاعدة حقيقية) | لم يُختبر مقابل خادم Postgres فعلي في CI | تعيين `DATABASE_URL` |
+| PostgreSQL | Verified | `storage/postgres-adapter.ts` | `postgres-storage.spec` مقابل PostgreSQL 17 حقيقي (commit/rollback، تزامن، health، استرداد بعد إعادة تشغيل) + `scripts/postgres-runtime-check.ts`؛ CI job `postgres` | الهجرات: جدول KV واحد؛ لا تقارير SQL | `LAYANX_DATABASE_URL=postgres://...` |
 | التعافي والاستئناف | Verified | `core/runtime-recovery.ts`, `recovery-*` | 15+ ملف `recovery-*.spec` | المعاملات الخارجية لا تُضمن مرة واحدة | — |
 | Ollama (محلي) | HW | `src/providers/*`, `models/http-providers.ts`, `models/inference.ts` | `provider-doctor.spec` (transport محقون) | Ollama + نموذج مثبت؛ الاستدلال الحقيقي لم يُتحقق منه في بيئة التدقيق | `npm run doctor` ثم `npm run smoke:ollama` |
 | OpenAI / Anthropic / Gemini | API | `providers/*-provider.ts` | `provider-doctor.spec`, `cloud-provider-adapters.spec` | مفاتيح API عبر `npm run secrets` | `npm run doctor` |

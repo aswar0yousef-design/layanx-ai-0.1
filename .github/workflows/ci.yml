@@ -42,6 +42,9 @@ jobs:
       # npm ci once package-lock.json is committed (reproducible); npm install until then.
       - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - run: npm run security:check
+      - name: Dependency audit (high and critical fail the build)
+        if: runner.os == 'Linux'
+        run: npm audit --audit-level=high
       # Same as main today. PR #155 failed when a real test key was supplied; fix those tests before changing this.
       - run: LAYANX_SECRET_VAULT_KEY= npm run free:check
       - name: Run operational acceptance
@@ -86,6 +89,37 @@ jobs:
       - run: node node_modules/tsx/dist/cli.mjs scripts/zap-smoke.ts
         env:
           LAYANX_ZAP: "on"
+  postgres:
+    # PostgresStorageAdapter against a real server: commit/rollback, concurrency, health, restart recovery.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: layanx
+          POSTGRES_PASSWORD: layanx-ci
+          POSTGRES_DB: layanx_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U layanx -d layanx_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: PostgreSQL storage test (fails if the database is missing)
+        env:
+          LAYANX_TEST_DATABASE_URL: postgres://layanx:layanx-ci@127.0.0.1:5432/layanx_test
+          LAYANX_REQUIRE_POSTGRES: "1"
+        run: node node_modules/tsx/dist/cli.mjs tests/postgres-storage.spec.ts
+      - name: Runtime starts on PostgreSQL and reports healthy storage
+        env:
+          LAYANX_DATABASE_URL: postgres://layanx:layanx-ci@127.0.0.1:5432/layanx_test
+        run: node node_modules/tsx/dist/cli.mjs scripts/postgres-runtime-check.ts
+
   evals:
     # The planner against a real (small) Ollama model: structured outputs, Arabic and prompt-injection cases.
     # The score of a 0.5B model is informative only; the job fails on harness or Ollama errors.

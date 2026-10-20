@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — PostgreSQL verified, dependency audit
+
+### Added
+- `tests/postgres-storage.spec.ts` against a real PostgreSQL (verified locally on 17.6): commit, rollback on error and explicit, closed-transaction writes refused, 20 concurrent writers, health (wrong password reported without echoing it), and approval restart recovery through `RuntimePersistence`.
+- `scripts/postgres-runtime-check.ts`: `createRuntime` + `restoreRuntime` on `LAYANX_DATABASE_URL`, health probe row must be fresh in PostgreSQL.
+- CI: job `postgres` (service `postgres:17`, `LAYANX_REQUIRE_POSTGRES=1`), and `npm audit --audit-level=high` in the Linux quality job (currently 0 vulnerabilities).
+
+### Fixed
+- `RuntimePersistence` used the configurable snapshot key for `save`/`list` but a hard-coded `"runtime:snapshots"` in its transactional methods; all now use `RuntimeStorage.snapshotKey` (no change with the default key).
+
 ## Unreleased — Creator images (OpenAI)
 
 ### Added
