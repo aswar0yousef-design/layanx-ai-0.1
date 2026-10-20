@@ -18,7 +18,7 @@
 | أداة الملفات | Verified | `tools/fabric.ts` | `tool-fabric.spec`, **`tool-sandbox-escape.spec` (جديد)** | TOCTOU متبقٍ (موثّق) | — |
 | أداة الطرفية | Verified | `tools/fabric.ts` (`createTerminalToolAdapter`) | `tool-fabric.spec` | قائمة سماح ضيقة جدًا بالتصميم؛ لا PowerShell عام | — |
 | Git | Partial | `tools/git.ts`, `tools/builtin.ts` | `git-branch-manager.spec`, `git-commit-generator.spec` وغيرها | `git.push` مستوى L4 يحتاج موافقة | صفحة Git |
-| قراءة الويب `browser.read` / `http.read` | Verified | `tools/fabric.ts`, `tools/http-read.ts`, **`security/network-guard.ts`** | `http-read-tool.spec`, **`tool-sandbox-escape.spec`** | DNS rebinding متبقٍ (موثّق) | — |
+| قراءة الويب `browser.read` / `http.read` / `media.inspect` | Verified | `tools/fabric.ts`, `tools/http-read.ts`, `business/media.ts`, `security/network-guard.ts` (`pinnedFetch`) | `http-read-tool.spec`, `tool-sandbox-escape.spec`, `dns-pinning.spec`, `media-manager.spec` + فحص HTTPS حي | DNS rebinding مغلق (R1)؛ التحويلات لا تُتبع تلقائيًا | — |
 | متصفح تفاعلي Playwright | Partial | `autonomy/browser-test.ts` | `autonomy-browser.spec` | `playwright-core` اختياري؛ لاختبار الواجهات فقط | — |
 | التحكم بسطح مكتب Windows | HW | `tools/desktop-control.ts` | CI job `windows` | Windows فقط | — |
 | Coding Mission / Safe Code Modifier | Partial | `core/safe-code-modifier.ts`, `core/code-review-agent.ts` | `safe-code-modifier.spec` | — | — |
