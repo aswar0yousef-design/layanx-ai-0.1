@@ -39,7 +39,7 @@
     "test:recovery": "node scripts/test-suite-runner.mjs --suite recovery"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.6",
     "tsx": "^4.19.2",
     "typescript": "^7.0.2",
     "@types/pg": "^8.15.5"
